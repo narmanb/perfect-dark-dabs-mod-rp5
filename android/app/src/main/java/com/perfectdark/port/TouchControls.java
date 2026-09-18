@@ -22,7 +22,7 @@ import org.libsdl.app.SDLActivity;
  *
  * Gameplay layout (first visible/testable pass):
  *  - lower-left fixed stick: movement (WASD)
- *  - lower-right fixed stick: analog-style continuous look
+ *  - lower-right fixed stick: analog-style continuous look or trackpad look
  *  - FIRE: Space / Z trigger
  *  - AIM: Z / R trigger
  *  - ACTION: E / B button
@@ -35,6 +35,12 @@ import org.libsdl.app.SDLActivity;
 public class TouchControls {
     public static final int LOOK_MODE_ANALOG = 0;
     public static final int LOOK_MODE_TRACKPAD = 1;
+
+    private static native int nativeTouchLookMode();
+    private static native float nativeTouchLookSensitivityX();
+    private static native float nativeTouchLookSensitivityY();
+    private static native float nativeTrackpadSensitivityX();
+    private static native float nativeTrackpadSensitivityY();
 
     private static final float MOVE_X = 0.16f;
     private static final float MOVE_Y = 0.74f;
@@ -84,6 +90,10 @@ public class TouchControls {
     private boolean gameplayActive;
     private float controlOpacity = 0.46f;
     private int lookMode = LOOK_MODE_ANALOG;
+    private float lookSensitivityX = 1.0f;
+    private float lookSensitivityY = 1.0f;
+    private float trackpadSensitivityX = 1.0f;
+    private float trackpadSensitivityY = 1.0f;
 
     private int movePointerId = -1;
     private int lookPointerId = -1;
@@ -118,7 +128,9 @@ public class TouchControls {
 
         gameplayActive = active;
 
-        if (!gameplayActive) {
+        if (gameplayActive) {
+            syncNativeLookSettings();
+        } else {
             releaseAll();
         }
 
@@ -135,7 +147,7 @@ public class TouchControls {
         overlay.invalidate();
     }
 
-    /** Ready for an Analog / Trackpad option later. Analog is the default. */
+    /** Direct Java override; entering gameplay re-syncs the native menu value. */
     public void setLookMode(int mode) {
         if (mode != LOOK_MODE_ANALOG && mode != LOOK_MODE_TRACKPAD) {
             return;
@@ -145,6 +157,25 @@ public class TouchControls {
         lookNormX = 0.0f;
         lookNormY = 0.0f;
         overlay.invalidate();
+    }
+
+    private void syncNativeLookSettings() {
+        int configuredMode = nativeTouchLookMode();
+        if (configuredMode == LOOK_MODE_ANALOG || configuredMode == LOOK_MODE_TRACKPAD) {
+            lookMode = configuredMode;
+        }
+
+        // The analog values are the same physical look-stick scale used by the
+        // selected Player 1 controller, so one sensitivity setting changes both
+        // the RP5 stick and the touchscreen stick. Negative advanced calibration
+        // values remain meaningful as axis inversion.
+        lookSensitivityX = clamp(nativeTouchLookSensitivityX(), -4.0f, 4.0f);
+        lookSensitivityY = clamp(nativeTouchLookSensitivityY(), -4.0f, 4.0f);
+        trackpadSensitivityX = clamp(nativeTrackpadSensitivityX(), 0.0f, 4.0f);
+        trackpadSensitivityY = clamp(nativeTrackpadSensitivityY(), 0.0f, 4.0f);
+
+        lookNormX = 0.0f;
+        lookNormY = 0.0f;
     }
 
     public boolean onTouchEvent(MotionEvent event, int viewWidth, int viewHeight) {
@@ -249,8 +280,8 @@ public class TouchControls {
                 if (lookMode == LOOK_MODE_ANALOG) {
                     updateLookStick(x, y, width, height);
                 } else {
-                    float dx = (x - lookLastX) * TRACKPAD_GAIN;
-                    float dy = (y - lookLastY) * TRACKPAD_GAIN;
+                    float dx = (x - lookLastX) * TRACKPAD_GAIN * trackpadSensitivityX;
+                    float dy = (y - lookLastY) * TRACKPAD_GAIN * trackpadSensitivityY;
                     lookLastX = x;
                     lookLastY = y;
 
@@ -320,8 +351,8 @@ public class TouchControls {
             }
 
             float[] v = applyRadialDeadzone(lookNormX, lookNormY, LOOK_DEADZONE);
-            float dx = v[0] * LOOK_SPEED_X;
-            float dy = v[1] * LOOK_SPEED_Y;
+            float dx = v[0] * LOOK_SPEED_X * lookSensitivityX;
+            float dy = v[1] * LOOK_SPEED_Y * lookSensitivityY;
 
             if (dx != 0.0f || dy != 0.0f) {
                 // Continuous relative motion is what makes this behave like an

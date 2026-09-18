@@ -7,6 +7,13 @@
 #include "bss.h"
 #include "input.h"
 
+/* Android-only controller/touch options live in androidcontrolsmenu.c. */
+s32 androidControlsGetTouchLookMode(void);
+f32 androidControlsGetTouchLookSensitivityX(void);
+f32 androidControlsGetTouchLookSensitivityY(void);
+f32 androidControlsGetTrackpadSensitivityX(void);
+f32 androidControlsGetTrackpadSensitivityY(void);
+
 /* menu.c owns this PC keyboard-mode marker. Android uses the game's own
  * on-screen keyboard, so Java may clear this mode if the system IME is opened. */
 extern s32 g_MenuKeyboardPlayer;
@@ -64,6 +71,46 @@ Java_com_perfectdark_port_MainActivity_nativeCancelTextInput(JNIEnv *env, jobjec
 	}
 
 	g_MenuKeyboardPlayer = -1;
+}
+
+JNIEXPORT jint JNICALL
+Java_com_perfectdark_port_TouchControls_nativeTouchLookMode(JNIEnv *env, jclass clazz)
+{
+	(void)env;
+	(void)clazz;
+	return (jint)androidControlsGetTouchLookMode();
+}
+
+JNIEXPORT jfloat JNICALL
+Java_com_perfectdark_port_TouchControls_nativeTouchLookSensitivityX(JNIEnv *env, jclass clazz)
+{
+	(void)env;
+	(void)clazz;
+	return (jfloat)androidControlsGetTouchLookSensitivityX();
+}
+
+JNIEXPORT jfloat JNICALL
+Java_com_perfectdark_port_TouchControls_nativeTouchLookSensitivityY(JNIEnv *env, jclass clazz)
+{
+	(void)env;
+	(void)clazz;
+	return (jfloat)androidControlsGetTouchLookSensitivityY();
+}
+
+JNIEXPORT jfloat JNICALL
+Java_com_perfectdark_port_TouchControls_nativeTrackpadSensitivityX(JNIEnv *env, jclass clazz)
+{
+	(void)env;
+	(void)clazz;
+	return (jfloat)androidControlsGetTrackpadSensitivityX();
+}
+
+JNIEXPORT jfloat JNICALL
+Java_com_perfectdark_port_TouchControls_nativeTrackpadSensitivityY(JNIEnv *env, jclass clazz)
+{
+	(void)env;
+	(void)clazz;
+	return (jfloat)androidControlsGetTrackpadSensitivityY();
 }
 
 #endif
