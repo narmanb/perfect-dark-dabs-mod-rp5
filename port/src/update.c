@@ -28,7 +28,7 @@
 #include <mach-o/dyld.h>
 #endif
 
-#include <SDL2/SDL.h>
+#include <SDL.h>
 #include "types.h"
 #include "fs.h"
 #include "system.h"
