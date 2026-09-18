@@ -1,21 +1,19 @@
 package com.perfectdark.port;
 
 import org.libsdl.app.SDLActivity;
-import android.app.Activity;
+
 import android.content.Context;
-import android.content.pm.PackageManager;
 import android.os.Bundle;
-import android.os.Environment;
+import android.view.KeyEvent;
 import android.view.View;
 import android.view.WindowManager;
-import android.widget.Toast;
-import androidx.core.app.ActivityCompat;
-import androidx.core.content.ContextCompat;
+import android.view.inputmethod.InputMethodManager;
+
 import java.io.File;
 
 public class MainActivity extends SDLActivity {
-    private static final int PERMISSION_REQUEST_CODE = 1;
-    
+    private TouchControls touchControls;
+
     static {
         System.loadLibrary("SDL2");
         System.loadLibrary("pd");
@@ -39,26 +37,25 @@ public class MainActivity extends SDLActivity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         android.util.Log.i("PerfectDark", "MainActivity onCreate start");
-        
+
         super.onCreate(savedInstanceState);
         android.util.Log.i("PerfectDark", "MainActivity super.onCreate complete");
-        
-        // Keep screen on and hide system UI
+
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
-        
-        // Handle display cutouts (remove white bars)
+
         if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.P) {
-            getWindow().getAttributes().layoutInDisplayCutoutMode = 
-                WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES;
+            getWindow().getAttributes().layoutInDisplayCutoutMode =
+                    WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES;
         }
-        
+
         hideSystemUI();
-        
-        // No external storage permissions needed with SAF + app-scoped storage
+        installTouchControls();
+
+        // No external storage permissions needed with SAF + app-scoped storage.
         initializeGame();
         android.util.Log.i("PerfectDark", "MainActivity onCreate complete");
     }
-    
+
     private void hideSystemUI() {
         View decorView = getWindow().getDecorView();
         int uiOptions = View.SYSTEM_UI_FLAG_FULLSCREEN
@@ -69,52 +66,91 @@ public class MainActivity extends SDLActivity {
                 | View.SYSTEM_UI_FLAG_LAYOUT_STABLE;
         decorView.setSystemUiVisibility(uiOptions);
     }
-    
-    private boolean checkPermissions() { return true; }
-    
-    private void requestPermissions() { /* no-op */ }
-    
-    @Override
-    public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
-        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
-        // No storage permissions requested; proceed regardless
+
+    /**
+     * SDL normally turns finger input into mouse input. Perfect Dark maps
+     * mouse-left to fire, so a finger drag currently shoots as well as looks.
+     * Replace the stock SDL touch listener with the phone-control layer.
+     */
+    private void installTouchControls() {
+        if (touchControls == null) {
+            touchControls = new TouchControls(this);
+        }
+
+        if (mSurface != null) {
+            mSurface.setOnTouchListener((view, event) ->
+                    touchControls.onTouchEvent(event,
+                            Math.max(1, view.getWidth()),
+                            Math.max(1, view.getHeight())));
+        }
     }
-    
+
     private void initializeGame() {
         android.util.Log.i("PerfectDark", "initializeGame start");
-        
-        // Create data directory in external storage
+
         File dataDir = new File(getExternalFilesDir(null), "data");
         android.util.Log.i("PerfectDark", "Data dir: " + dataDir.getAbsolutePath());
         if (!dataDir.exists()) {
             dataDir.mkdirs();
         }
-        
-        // Initialize native game
+
         android.util.Log.i("PerfectDark", "Calling nativeInit");
         nativeInit(dataDir.getAbsolutePath());
-        
+
         android.util.Log.i("PerfectDark", "initializeGame complete");
     }
-    
+
+    /**
+     * Android Back should mean Escape inside Perfect Dark rather than exiting
+     * the Activity. If SDL text input is active, the first Back only dismisses
+     * the Android keyboard; the next Back becomes Escape in the game.
+     */
+    @Override
+    public void onBackPressed() {
+        if (SDLActivity.isScreenKeyboardShown()) {
+            View focused = getCurrentFocus();
+            if (focused != null) {
+                InputMethodManager imm = (InputMethodManager) getSystemService(Context.INPUT_METHOD_SERVICE);
+                if (imm != null) {
+                    imm.hideSoftInputFromWindow(focused.getWindowToken(), 0);
+                }
+            }
+            SDLActivity.onNativeKeyboardFocusLost();
+            if (mSurface != null) {
+                mSurface.requestFocus();
+            }
+            return;
+        }
+
+        SDLActivity.onNativeKeyDown(KeyEvent.KEYCODE_ESCAPE);
+        SDLActivity.onNativeKeyUp(KeyEvent.KEYCODE_ESCAPE);
+    }
+
     @Override
     protected void onResume() {
         super.onResume();
         hideSystemUI();
+        // SDLSurface restores its stock listener when SDL resumes.
+        installTouchControls();
     }
-    
+
     @Override
     protected void onPause() {
+        if (touchControls != null) {
+            touchControls.releaseAll();
+        }
         super.onPause();
     }
-    
+
     @Override
     protected void onDestroy() {
+        if (touchControls != null) {
+            touchControls.releaseAll();
+        }
         super.onDestroy();
         nativeDestroy();
     }
 
-    // Native methods
     public native void nativeInit(String dataPath);
     public native void nativeStartGame();
     public native void nativeDestroy();
