@@ -36,7 +36,13 @@ static bool UnixSymlink(CommandData *Cmd,const std::string &Target,const wchar *
   tv[0].tv_usec=long(fta->GetUnixNS()%1000000000/1000);
   tv[1].tv_sec=ftm->GetUnix();
   tv[1].tv_usec=long(ftm->GetUnixNS()%1000000000/1000);
+#if defined(__ANDROID__) || defined(ANDROID) || defined(_ANDROID)
+  // Bionic does not provide lutimes at our minimum API level. Do not use
+  // utimes here because it follows the symlink and would timestamp its target.
+  (void)tv;
+#else
   lutimes(LinkNameA.c_str(),tv);
+#endif
 #endif
 #endif
 
