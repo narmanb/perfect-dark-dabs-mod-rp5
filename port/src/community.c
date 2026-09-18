@@ -16,7 +16,7 @@
 #include <stdarg.h>
 #include <string.h>
 #include <strings.h>
-#include <SDL2/SDL.h>
+#include <SDL.h>
 #include <PR/ultratypes.h>
 #include "platform.h"
 #include "types.h"
