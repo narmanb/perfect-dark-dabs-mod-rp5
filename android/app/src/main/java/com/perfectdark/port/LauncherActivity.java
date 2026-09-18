@@ -73,20 +73,20 @@ public class LauncherActivity extends AppCompatActivity {
         }
     }
 
-    private File getDataDir() {
+    private File getGameDataDir() {
         return new File(getExternalFilesDir(null), "data");
     }
 
     private File getRomFile() {
-        return new File(getDataDir(), ROM_FILE_NAME);
+        return new File(getGameDataDir(), ROM_FILE_NAME);
     }
 
     private File getTempRomFile() {
-        return new File(getDataDir(), ROM_TEMP_FILE_NAME);
+        return new File(getGameDataDir(), ROM_TEMP_FILE_NAME);
     }
 
     private void ensureDataDir() {
-        File dataDir = getDataDir();
+        File dataDir = getGameDataDir();
         if (!dataDir.exists() && !dataDir.mkdirs()) {
             Toast.makeText(this, "Unable to create game data folder", Toast.LENGTH_LONG).show();
         }
@@ -259,11 +259,7 @@ public class LauncherActivity extends AppCompatActivity {
                         + "Size: " + sizeText + "\n\n"
                         + "The filename is not checked.")
                 .setPositiveButton("Pick another", (d, w) -> {
-                    if (selectedSource && file.exists()) {
-                        //noinspection ResultOfMethodCallIgnored
-                        file.delete();
-                    } else if (!selectedSource && file.exists()) {
-                        // Remove an invalid stored copy so it cannot be reused at next launch.
+                    if (file.exists()) {
                         //noinspection ResultOfMethodCallIgnored
                         file.delete();
                     }
