@@ -21,6 +21,21 @@ public class MainActivity extends SDLActivity {
         System.loadLibrary("pd");
     }
 
+    /**
+     * Dab's filesystem defaults its base directory to $E/data, where $E is the
+     * native executable directory. On Android that resolves through app_process
+     * rather than this application's scoped files directory. Pass the exact
+     * directory used by LauncherActivity so the native game opens the same ROM
+     * that the launcher just copied and verified.
+     */
+    @Override
+    protected String[] getArguments() {
+        File dataDir = new File(getExternalFilesDir(null), "data");
+        String path = dataDir.getAbsolutePath();
+        android.util.Log.i("PerfectDark", "Native basedir/savedir: " + path);
+        return new String[] { "--basedir", path, "--savedir", path };
+    }
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         android.util.Log.i("PerfectDark", "MainActivity onCreate start");
