@@ -28,7 +28,16 @@ public class GameView extends GLSurfaceView {
     
     @Override
     public boolean onTouchEvent(MotionEvent event) {
-        return touchControls.onTouchEvent(event);
+        int width = getWidth();
+        int height = getHeight();
+
+        // Ignore touch until Android has laid out the surface. This avoids
+        // dividing by zero while TouchControls normalizes pointer positions.
+        if (width <= 0 || height <= 0) {
+            return true;
+        }
+
+        return touchControls.onTouchEvent(event, width, height);
     }
     
     @Override
