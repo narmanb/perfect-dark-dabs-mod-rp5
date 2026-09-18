@@ -23,8 +23,19 @@ public class MainActivity extends SDLActivity {
     private MenuTouchOverlay menuTouchOverlay;
     private boolean menuTouchActive;
     private boolean menuOverlayTouchActive;
+    private boolean gameBackKeyHeld;
     private OnBackInvokedCallback backInvokedCallback;
     private final Handler touchUiHandler = new Handler(Looper.getMainLooper());
+
+    private final Runnable releaseGameBackKey = new Runnable() {
+        @Override
+        public void run() {
+            if (gameBackKeyHeld) {
+                SDLActivity.onNativeKeyUp(KeyEvent.KEYCODE_ESCAPE);
+                gameBackKeyHeld = false;
+            }
+        }
+    };
 
     private final Runnable touchUiPoll = new Runnable() {
         @Override
@@ -287,9 +298,11 @@ public class MainActivity extends SDLActivity {
     }
 
     /**
-     * Perfect Dark's PC cancel binding is right mouse, not Escape. Android Back
-     * and the on-screen Back button therefore share this exact action. If SDL
-     * text input is somehow active, Back only exits that mode first.
+     * Perfect Dark's menu code treats Escape as an unconditional Back action.
+     * Keep the synthetic key down long enough to span native input polling;
+     * pressing and releasing it in the same Java callback can be completely
+     * missed before the next game tick. Android Back and the on-screen Back
+     * button both use this shared path.
      */
     private void sendGameBack() {
         if (nativeTextInputActive() || SDLActivity.isScreenKeyboardShown()) {
@@ -297,11 +310,17 @@ public class MainActivity extends SDLActivity {
             return;
         }
 
-        SDLActivity.onNativeMouse(MotionEvent.BUTTON_SECONDARY,
-                MotionEvent.ACTION_DOWN, 0.0f, 0.0f, true);
-        SDLActivity.onNativeMouse(0,
-                MotionEvent.ACTION_UP, 0.0f, 0.0f, true);
-        touchUiHandler.postDelayed(this::refreshTouchMode, 40L);
+        touchUiHandler.removeCallbacks(releaseGameBackKey);
+
+        if (!gameBackKeyHeld) {
+            SDLActivity.onNativeKeyDown(KeyEvent.KEYCODE_ESCAPE);
+            gameBackKeyHeld = true;
+        }
+
+        // 90 ms safely spans multiple 30/60 Hz game input polls without making
+        // a single Back press feel like a held/repeating input.
+        touchUiHandler.postDelayed(releaseGameBackKey, 90L);
+        touchUiHandler.postDelayed(this::refreshTouchMode, 110L);
     }
 
     private void registerModernBackHandler() {
@@ -341,6 +360,8 @@ public class MainActivity extends SDLActivity {
     @Override
     protected void onPause() {
         touchUiHandler.removeCallbacks(touchUiPoll);
+        touchUiHandler.removeCallbacks(releaseGameBackKey);
+        releaseGameBackKey.run();
         menuTouchActive = false;
         menuOverlayTouchActive = false;
         if (touchControls != null) {
@@ -354,6 +375,7 @@ public class MainActivity extends SDLActivity {
 
     @Override
     protected void onDestroy() {
+        releaseGameBackKey.run();
         touchUiHandler.removeCallbacksAndMessages(null);
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU && backInvokedCallback != null) {
             getOnBackInvokedDispatcher().unregisterOnBackInvokedCallback(backInvokedCallback);
