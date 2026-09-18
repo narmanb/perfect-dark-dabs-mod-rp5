@@ -1740,6 +1740,7 @@ struct menudialogdef g_ExtendedGameMenuDialog = {
 };
 
 static MenuItemHandlerResult menuhandlerDoBind(s32 operation, struct menuitem *item, union handlerdata *data);
+static MenuItemHandlerResult menuhandlerClearBind(s32 operation, struct menuitem *item, union handlerdata *data);
 
 struct menuitem g_ExtendedBindKeyMenuItems[] = {
 	{
@@ -1770,9 +1771,17 @@ struct menuitem g_ExtendedBindKeyMenuItems[] = {
 		MENUITEMTYPE_SELECTABLE,
 		0,
 		MENUITEMFLAG_SELECTABLE_CENTRE | MENUITEMFLAG_LITERAL_TEXT,
-		(uintptr_t)"ESC to cancel, DEL to remove binding\n",
+		(uintptr_t)"System BACK to cancel\n",
 		0,
 		menuhandlerDoBind,
+	},
+	{
+		MENUITEMTYPE_SELECTABLE,
+		0,
+		MENUITEMFLAG_SELECTABLE_CENTRE | MENUITEMFLAG_LITERAL_TEXT,
+		(uintptr_t)"CLEAR this binding\n",
+		0,
+		menuhandlerClearBind,
 	},
 	{ MENUITEMTYPE_END },
 };
@@ -1902,6 +1911,28 @@ struct menuitem g_ExtendedBindsMenuItems[] = {
 	{ MENUITEMTYPE_END },
 };
 
+static void bindApplyKey(s32 vk)
+{
+	if (g_BindKeySetter) {
+		g_BindKeySetter(vk);
+	} else {
+		inputKeyBind(g_ExtMenuPlayer, g_BindContKey, g_BindIndex, vk);
+	}
+}
+
+static MenuItemHandlerResult menuhandlerClearBind(s32 operation, struct menuitem *item, union handlerdata *data)
+{
+	(void)item;
+	(void)data;
+	if (operation == MENUOP_SET) {
+		bindApplyKey(0);
+		inputSetBindCapture(0);
+		inputClearLastKey();
+		menuPopDialog();
+	}
+	return 0;
+}
+
 static MenuItemHandlerResult menuhandlerDoBind(s32 operation, struct menuitem *item, union handlerdata *data)
 {
 	if (!menuIsDialogOpen(&g_ExtendedBindKeyMenuDialog)) {
@@ -1909,6 +1940,8 @@ static MenuItemHandlerResult menuhandlerDoBind(s32 operation, struct menuitem *i
 	}
 
 	if (inputKeyPressed(VK_ESCAPE)) {
+		inputSetBindCapture(0);
+		inputClearLastKey();
 		menuPopDialog();
 		return 0;
 	}
@@ -1916,11 +1949,9 @@ static MenuItemHandlerResult menuhandlerDoBind(s32 operation, struct menuitem *i
 	const s32 key = inputGetLastKey();
 	if (key && key != VK_ESCAPE) {
 		const s32 vk = (key == VK_DELETE) ? 0 : key;
-		if (g_BindKeySetter) {
-			g_BindKeySetter(vk);
-		} else {
-			inputKeyBind(g_ExtMenuPlayer, g_BindContKey, g_BindIndex, vk);
-		}
+		bindApplyKey(vk);
+		inputSetBindCapture(0);
+		inputClearLastKey();
 		menuPopDialog();
 	}
 
@@ -1961,6 +1992,7 @@ static MenuItemHandlerResult menuhandlerBind(s32 operation, struct menuitem *ite
 		g_BindContKey = menuBinds[idx].ck;
 		g_BindKeySetter = NULL;
 		inputClearLastKey();
+		inputSetBindCapture(1);
 		menuPushDialog(&g_ExtendedBindKeyMenuDialog);
 		break;
 	case MENUOP_GETSELECTEDINDEX:
@@ -3396,6 +3428,7 @@ static MenuItemHandlerResult menuhandlerModBind(s32 operation, struct menuitem *
 		g_BindContKey = modMenuBinds[idx].ck;
 		g_BindKeySetter = NULL;
 		inputClearLastKey();
+		inputSetBindCapture(1);
 		menuPushDialog(&g_ExtendedBindKeyMenuDialog);
 		break;
 	case MENUOP_GETSELECTEDINDEX:
@@ -3832,6 +3865,7 @@ static MenuItemHandlerResult menuhandlerModKeyBind(s32 operation, struct menuite
 		g_ExtendedBindKeyMenuItems[0].param2 = (uintptr_t)modKeyBinds[idx].name;
 		g_BindKeySetter = modKeyBinds[idx].set;
 		inputClearLastKey();
+		inputSetBindCapture(1);
 		menuPushDialog(&g_ExtendedBindKeyMenuDialog);
 		break;
 	case MENUOP_GETSELECTEDINDEX:

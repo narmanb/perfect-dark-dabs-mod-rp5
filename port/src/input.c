@@ -997,6 +997,21 @@ static inline s32 inputAxisScale(s32 x, const s32 deadzone, const f32 scale)
 	}
 }
 
+static s32 bindCaptureActive = 0;
+
+void inputSetBindCapture(s32 active)
+{
+	bindCaptureActive = !!active;
+	if (bindCaptureActive) {
+		inputClearLastKey();
+	}
+}
+
+s32 inputGetBindCapture(void)
+{
+	return bindCaptureActive;
+}
+
 s32 inputReadController(s32 idx, OSContPad *npad)
 {
 	if (idx < 0 || idx >= INPUT_MAX_CONTROLLERS  || !npad) {
@@ -1004,6 +1019,17 @@ s32 inputReadController(s32 idx, OSContPad *npad)
 	}
 
 	npad->button = 0;
+
+	// While the binding dialog is listening, controller presses belong exclusively
+	// to the bind capture. The SDL event watcher still fills lastKey, but the same
+	// press cannot also drive/cancel the game's menu.
+	if (bindCaptureActive) {
+		npad->stick_x = 0;
+		npad->stick_y = 0;
+		npad->rstick_x = 0;
+		npad->rstick_y = 0;
+		return 0;
+	}
 
 	if (textInput) {
 		npad->stick_x = 0;

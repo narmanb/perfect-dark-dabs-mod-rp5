@@ -242,6 +242,11 @@ void inputSaveBinds(void);
 void inputSetDefaultKeyBinds(s32 cidx, s32 n64mode);
 void inputApplyAkimboTriggers(s32 on);
 
+// Binding capture keeps physical controller presses out of menu/gameplay reads
+// while still allowing the SDL event watcher to report them through lastKey.
+void inputSetBindCapture(s32 active);
+s32 inputGetBindCapture(void);
+
 // clear or get the last pressed button
 void inputClearLastKey(void);
 s32 inputGetLastKey(void);
