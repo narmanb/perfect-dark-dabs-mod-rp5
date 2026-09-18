@@ -4,7 +4,7 @@
 #include <string.h>
 #include <strings.h>
 #include <PR/ultratypes.h>
-#include <SDL2/SDL.h>
+#include <SDL.h>
 #include "platform.h"
 #include "types.h"
 #include "game/modghost.h"
