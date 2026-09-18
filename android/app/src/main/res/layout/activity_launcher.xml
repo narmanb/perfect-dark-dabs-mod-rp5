@@ -1,27 +1,23 @@
 <?xml version="1.0" encoding="utf-8"?>
-<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
-    android:id="@+id/missingRomContainer"
-    android:layout_width="match_parent"
-    android:layout_height="match_parent"
-    android:orientation="vertical"
-    android:gravity="center"
-    android:padding="24dp"
-    android:background="#000000">
-
-    <TextView
-        android:id="@+id/infoText"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:textColor="#FFFFFF"
-        android:textSize="16sp"
-        android:text="ROM not found. Select your ROM to continue."/>
-
-    <Button
-        android:id="@+id/pickRomButton"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:text="Select ROM"
-        android:layout_marginTop="16dp"/>
-
-</LinearLayout>
-
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent" android:layout_height="match_parent" android:background="#000000">
+    <LinearLayout android:id="@+id/missingRomContainer" android:layout_width="match_parent"
+        android:layout_height="wrap_content" android:orientation="vertical" android:padding="24dp">
+        <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:text="PERFECT DARK" android:textColor="#FFFFFF" android:textSize="26sp" android:textStyle="bold"/>
+        <TextView android:id="@+id/infoText" android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:layout_marginTop="18dp" android:textColor="#FFFFFF" android:textSize="16sp"/>
+        <Button android:id="@+id/pickRomButton" android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:layout_marginTop="12dp" android:text="Select Perfect Dark ROM"/>
+        <View android:layout_width="match_parent" android:layout_height="1dp" android:layout_marginTop="24dp"
+            android:layout_marginBottom="20dp" android:background="#555555"/>
+        <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:text="GE-X PLUS" android:textColor="#FFFFFF" android:textSize="20sp" android:textStyle="bold"/>
+        <TextView android:id="@+id/geStatusText" android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:layout_marginTop="10dp" android:textColor="#CCCCCC" android:textSize="15sp"/>
+        <Button android:id="@+id/pickGeRomButton" android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:layout_marginTop="12dp" android:text="Select GoldenEye 007 ROM"/>
+        <Button android:id="@+id/playButton" android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:layout_marginTop="28dp" android:text="Play Perfect Dark" android:visibility="gone"/>
+    </LinearLayout>
+</ScrollView>
