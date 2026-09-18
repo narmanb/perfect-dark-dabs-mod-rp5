@@ -30,6 +30,9 @@ import java.security.NoSuchAlgorithmException;
 public class LauncherActivity extends AppCompatActivity {
     private static final String ROM_FILE_NAME = "pd.ntsc-final.z64";
     private static final String ROM_TEMP_FILE_NAME = ROM_FILE_NAME + ".tmp";
+    private static final String GE_ROM_FILE_NAME = "goldeneye-007-us.z64";
+    private static final String GE_ROM_TEMP_FILE_NAME = GE_ROM_FILE_NAME + ".tmp";
+    private static final long EXPECTED_GE_ROM_SIZE = 0xC00000L;
     private static final long EXPECTED_ROM_SIZE = 32L * 1024L * 1024L;
 
     // Primary: NTSC-U Rev 1 (v1.1) .z64 (recommended)
@@ -40,6 +43,10 @@ public class LauncherActivity extends AppCompatActivity {
     private View missingRomView;
     private TextView infoText;
     private Button pickRomButton;
+    private TextView geStatusText;
+    private Button pickGeRomButton;
+    private Button playButton;
+    private boolean pickingGoldenEye;
 
     private final ActivityResultLauncher<String[]> romPicker =
             registerForActivityResult(new ActivityResultContracts.OpenDocument(), this::onRomPicked);
@@ -52,17 +59,25 @@ public class LauncherActivity extends AppCompatActivity {
         missingRomView = findViewById(R.id.missingRomContainer);
         infoText = findViewById(R.id.infoText);
         pickRomButton = findViewById(R.id.pickRomButton);
+        geStatusText = findViewById(R.id.geStatusText);
+        pickGeRomButton = findViewById(R.id.pickGeRomButton);
+        playButton = findViewById(R.id.playButton);
 
-        pickRomButton.setOnClickListener(v -> openRomPicker());
+        pickRomButton.setOnClickListener(v -> { pickingGoldenEye = false; openRomPicker(); });
+        pickGeRomButton.setOnClickListener(v -> { pickingGoldenEye = true; openRomPicker(); });
+        playButton.setOnClickListener(v -> startGame());
 
         ensureDataDir();
         cleanupInterruptedCopy();
+        cleanupInterruptedGeCopy();
+
+        updateGoldenEyeStatus();
 
         if (romExists()) {
             File target = getRomFile();
             int hashStatus = checkRomHash(target);
             if (hashStatus == 0) {
-                startGame();
+                showLauncherReady();
             } else if (hashStatus == 1) {
                 showV10WarningDialog(target);
             } else {
@@ -79,6 +94,14 @@ public class LauncherActivity extends AppCompatActivity {
 
     private File getRomFile() {
         return new File(getGameDataDir(), ROM_FILE_NAME);
+    }
+
+    private File getGoldenEyeRomFile() {
+        return new File(getGameDataDir(), GE_ROM_FILE_NAME);
+    }
+
+    private File getGoldenEyeTempFile() {
+        return new File(getGameDataDir(), GE_ROM_TEMP_FILE_NAME);
     }
 
     private File getTempRomFile() {
@@ -100,9 +123,33 @@ public class LauncherActivity extends AppCompatActivity {
         }
     }
 
+    private void cleanupInterruptedGeCopy() {
+        File temp = getGoldenEyeTempFile();
+        if (temp.exists()) temp.delete();
+    }
+
     private boolean romExists() {
         File target = getRomFile();
         return target.exists() && target.length() > 0;
+    }
+
+    private void showLauncherReady() {
+        missingRomView.setVisibility(View.VISIBLE);
+        infoText.setText("Perfect Dark ROM: verified and ready.");
+        pickRomButton.setText("Replace Perfect Dark ROM");
+        playButton.setVisibility(View.VISIBLE);
+        updateGoldenEyeStatus();
+    }
+
+    private void updateGoldenEyeStatus() {
+        File ge = getGoldenEyeRomFile();
+        if (ge.exists() && ge.length() == EXPECTED_GE_ROM_SIZE) {
+            geStatusText.setText("GoldenEye 007 ROM: imported — GE-X Plus conversion will run automatically.");
+            pickGeRomButton.setText("Replace GoldenEye ROM");
+        } else {
+            geStatusText.setText("GoldenEye 007 ROM: optional — not imported.");
+            pickGeRomButton.setText("Select GoldenEye 007 ROM");
+        }
     }
 
     private void showMissingRomUi() {
@@ -117,6 +164,10 @@ public class LauncherActivity extends AppCompatActivity {
     }
 
     private void onRomPicked(@Nullable Uri uri) {
+        if (pickingGoldenEye) {
+            onGoldenEyeRomPicked(uri);
+            return;
+        }
         if (uri == null) {
             Toast.makeText(this, "No file selected", Toast.LENGTH_SHORT).show();
             return;
@@ -219,6 +270,74 @@ public class LauncherActivity extends AppCompatActivity {
         }
 
         return new CopyResult(status, installedMd5, bytesCopied);
+    }
+
+
+    private void onGoldenEyeRomPicked(@Nullable Uri uri) {
+        if (uri == null) {
+            Toast.makeText(this, "No file selected", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        ensureDataDir();
+        File temp = getGoldenEyeTempFile();
+        File target = getGoldenEyeRomFile();
+        try {
+            if (temp.exists()) temp.delete();
+            long bytes = 0;
+            byte[] header = new byte[0x40];
+            int headerFilled = 0;
+            try (InputStream in = getContentResolver().openInputStream(uri);
+                 FileOutputStream out = new FileOutputStream(temp)) {
+                if (in == null) throw new IOException("Unable to open selected file");
+                byte[] buf = new byte[64 * 1024];
+                int read;
+                while ((read = in.read(buf)) != -1) {
+                    if (read == 0) continue;
+                    if (headerFilled < header.length) {
+                        int n = Math.min(read, header.length - headerFilled);
+                        System.arraycopy(buf, 0, header, headerFilled, n);
+                        headerFilled += n;
+                    }
+                    out.write(buf, 0, read);
+                    bytes += read;
+                }
+                out.flush();
+                out.getFD().sync();
+            }
+            if (bytes != EXPECTED_GE_ROM_SIZE || headerFilled < header.length || !isGoldenEyeUsHeader(header)) {
+                temp.delete();
+                new AlertDialog.Builder(this)
+                        .setTitle("GoldenEye ROM not supported")
+                        .setMessage("GE-X Plus requires the 12 MiB GoldenEye 007 USA ROM. The filename and N64 dump byte order do not matter.")
+                        .setPositiveButton("OK", null).show();
+                return;
+            }
+            if (target.exists() && !target.delete()) throw new IOException("Could not replace existing GoldenEye ROM");
+            if (!temp.renameTo(target)) throw new IOException("Could not install GoldenEye ROM");
+            Toast.makeText(this, "GoldenEye 007 USA ROM imported", Toast.LENGTH_SHORT).show();
+            updateGoldenEyeStatus();
+        } catch (IOException e) {
+            temp.delete();
+            Toast.makeText(this, "Failed to import GoldenEye ROM: " + e.getMessage(), Toast.LENGTH_LONG).show();
+        }
+    }
+
+    private boolean isGoldenEyeUsHeader(byte[] source) {
+        if (source.length < 0x40) return false;
+        byte[] h = source.clone();
+        int magic = ((h[0] & 255) << 24) | ((h[1] & 255) << 16) | ((h[2] & 255) << 8) | (h[3] & 255);
+        if (magic == 0x37804012) {
+            for (int i = 0; i < h.length; i += 2) { byte t=h[i]; h[i]=h[i+1]; h[i+1]=t; }
+        } else if (magic == 0x40123780) {
+            for (int i = 0; i < h.length; i += 4) { byte t=h[i]; h[i]=h[i+3]; h[i+3]=t; t=h[i+1]; h[i+1]=h[i+2]; h[i+2]=t; }
+        } else if (magic != 0x80371240) return false;
+        byte[] crc = {(byte)0xdc,(byte)0xbc,0x50,(byte)0xd1,0x09,(byte)0xfd,0x1a,(byte)0xa3};
+        byte[] name = "GOLDENEYE".getBytes(java.nio.charset.StandardCharsets.US_ASCII);
+        byte[] code = "NGEE".getBytes(java.nio.charset.StandardCharsets.US_ASCII);
+        for (int i=0;i<crc.length;i++) if (h[0x10+i]!=crc[i]) return false;
+        for (int i=0;i<name.length;i++) if (h[0x20+i]!=name[i]) return false;
+        for (int i=0;i<code.length;i++) if (h[0x3b+i]!=code[i]) return false;
+        return true;
     }
 
     private void startGame() {
