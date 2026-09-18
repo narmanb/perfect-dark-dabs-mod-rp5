@@ -2,7 +2,8 @@
 
 #include <jni.h>
 
-#include "constants.h"
+/* bss.h includes ultra64 before constants.h. Keep that order: constants.h
+ * defines osSyncPrintf away for game code, while ultra64 still declares it. */
 #include "bss.h"
 
 /*
