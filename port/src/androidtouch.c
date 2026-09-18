@@ -5,6 +5,11 @@
 /* bss.h includes ultra64 before constants.h. Keep that order: constants.h
  * defines osSyncPrintf away for game code, while ultra64 still declares it. */
 #include "bss.h"
+#include "input.h"
+
+/* menu.c owns this PC keyboard-mode marker. Android uses the game's own
+ * on-screen keyboard, so Java may clear this mode if the system IME is opened. */
+extern s32 g_MenuKeyboardPlayer;
 
 /*
  * Tell the Java touch layer when it is safe to replace SDL's normal finger
@@ -38,6 +43,27 @@ Java_com_perfectdark_port_MainActivity_nativeGameplayTouchActive(JNIEnv *env, jo
 	}
 
 	return JNI_TRUE;
+}
+
+JNIEXPORT jboolean JNICALL
+Java_com_perfectdark_port_MainActivity_nativeTextInputActive(JNIEnv *env, jobject thiz)
+{
+	(void)env;
+	(void)thiz;
+	return (inputIsTextInputActive() || g_MenuKeyboardPlayer >= 0) ? JNI_TRUE : JNI_FALSE;
+}
+
+JNIEXPORT void JNICALL
+Java_com_perfectdark_port_MainActivity_nativeCancelTextInput(JNIEnv *env, jobject thiz)
+{
+	(void)env;
+	(void)thiz;
+
+	if (inputIsTextInputActive()) {
+		inputStopTextInput();
+	}
+
+	g_MenuKeyboardPlayer = -1;
 }
 
 #endif
