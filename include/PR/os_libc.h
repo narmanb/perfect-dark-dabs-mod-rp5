@@ -36,7 +36,7 @@
 #ifndef PLATFORM_N64
 #include <stdio.h>
 #endif
-#ifdef PLATFORM_OSX
+#if defined(PLATFORM_OSX) || defined(PLATFORM_ANDROID)
 #include <strings.h>
 #endif
 
@@ -88,7 +88,7 @@ extern "C" {
 
 /* byte string operations */
 
-#ifndef PLATFORM_OSX
+#if !defined(PLATFORM_OSX) && !defined(PLATFORM_ANDROID)
 extern void     bcopy(const void *, void *, size_t);
 extern int      bcmp(const void *, const void *, size_t);
 extern void     bzero(void *, size_t);
