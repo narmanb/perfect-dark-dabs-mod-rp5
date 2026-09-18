@@ -36,6 +36,8 @@ public class TouchControls {
     public static final int LOOK_MODE_ANALOG = 0;
     public static final int LOOK_MODE_TRACKPAD = 1;
 
+    private static native boolean nativeGameplayTouchEnabled();
+    private static native float nativeGameplayTouchOpacity();
     private static native int nativeTouchLookMode();
     private static native float nativeTouchLookSensitivityX();
     private static native float nativeTouchLookSensitivityY();
@@ -88,6 +90,7 @@ public class TouchControls {
     private final ControlOverlay overlay;
 
     private boolean gameplayActive;
+    private boolean gameplayTouchEnabled = true;
     private float controlOpacity = 0.46f;
     private int lookMode = LOOK_MODE_ANALOG;
     private float lookSensitivityX = 1.0f;
@@ -129,7 +132,7 @@ public class TouchControls {
         gameplayActive = active;
 
         if (gameplayActive) {
-            syncNativeLookSettings();
+            refreshNativeSettings();
         } else {
             releaseAll();
         }
@@ -159,7 +162,9 @@ public class TouchControls {
         overlay.invalidate();
     }
 
-    private void syncNativeLookSettings() {
+    public void refreshNativeSettings() {
+        gameplayTouchEnabled = nativeGameplayTouchEnabled();
+        controlOpacity = clamp(nativeGameplayTouchOpacity(), 0.0f, 1.0f);
         int configuredMode = nativeTouchLookMode();
         if (configuredMode == LOOK_MODE_ANALOG || configuredMode == LOOK_MODE_TRACKPAD) {
             lookMode = configuredMode;
@@ -179,7 +184,10 @@ public class TouchControls {
     }
 
     public boolean onTouchEvent(MotionEvent event, int viewWidth, int viewHeight) {
-        if (!gameplayActive || viewWidth <= 0 || viewHeight <= 0) {
+        // Re-read the native values at the start of every gameplay gesture. This
+        // makes sensitivity changes effective immediately after closing a menu.
+        refreshNativeSettings();
+        if (!gameplayActive || !gameplayTouchEnabled || viewWidth <= 0 || viewHeight <= 0) {
             return true;
         }
 
@@ -490,7 +498,7 @@ public class TouchControls {
         protected void onDraw(Canvas canvas) {
             super.onDraw(canvas);
 
-            if (!gameplayActive || controlOpacity <= 0.0f) {
+            if (!gameplayActive || !gameplayTouchEnabled || controlOpacity <= 0.0f) {
                 return;
             }
 

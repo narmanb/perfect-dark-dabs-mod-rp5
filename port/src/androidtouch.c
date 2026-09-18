@@ -8,6 +8,8 @@
 #include "input.h"
 
 /* Android-only controller/touch options live in androidcontrolsmenu.c. */
+s32 androidControlsGetGameplayTouchEnabled(void);
+f32 androidControlsGetGameplayTouchOpacity(void);
 s32 androidControlsGetTouchLookMode(void);
 f32 androidControlsGetTouchLookSensitivityX(void);
 f32 androidControlsGetTouchLookSensitivityY(void);
@@ -71,6 +73,20 @@ Java_com_perfectdark_port_MainActivity_nativeCancelTextInput(JNIEnv *env, jobjec
 	}
 
 	g_MenuKeyboardPlayer = -1;
+}
+
+JNIEXPORT jboolean JNICALL
+Java_com_perfectdark_port_TouchControls_nativeGameplayTouchEnabled(JNIEnv *env, jclass clazz)
+{
+	(void)env; (void)clazz;
+	return androidControlsGetGameplayTouchEnabled() ? JNI_TRUE : JNI_FALSE;
+}
+
+JNIEXPORT jfloat JNICALL
+Java_com_perfectdark_port_TouchControls_nativeGameplayTouchOpacity(JNIEnv *env, jclass clazz)
+{
+	(void)env; (void)clazz;
+	return (jfloat)androidControlsGetGameplayTouchOpacity();
 }
 
 JNIEXPORT jint JNICALL

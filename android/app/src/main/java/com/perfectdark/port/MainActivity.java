@@ -261,6 +261,9 @@ public class MainActivity extends SDLActivity {
         }
 
         boolean gameplay = nativeGameplayTouchActive();
+        // Settings can change while a native options dialog is open even if the
+        // gameplay-active state returns to the same value afterwards.
+        touchControls.refreshNativeSettings();
         touchControls.setGameplayActive(gameplay);
         menuTouchOverlay.setMenuActive(!gameplay);
     }

@@ -16,6 +16,8 @@ extern struct menuitem g_ExtendedControllerMenuItems[];
 extern struct menudialogdef g_ExtendedControllerMenuDialog;
 extern struct menudialogdef g_ExtendedStickMenuDialog;
 
+static s32 g_AndroidGameplayTouchEnabled = 1;
+static f32 g_AndroidGameplayTouchOpacity = 0.46f;
 static s32 g_AndroidTouchLookMode = 0;
 static f32 g_AndroidTrackpadSensitivityX = 1.0f;
 static f32 g_AndroidTrackpadSensitivityY = 1.0f;
@@ -47,6 +49,29 @@ static f32 androidControlsGetPlayerLookScale(s32 player, s32 axis)
 static void androidControlsSetPlayerLookScale(s32 player, s32 axis, f32 value)
 {
 	inputControllerSetAxisScale(player, androidControlsLookStick(player), axis, value);
+}
+
+static MenuItemHandlerResult menuhandlerAndroidGameplayTouchEnabled(s32 operation, struct menuitem *item, union handlerdata *data)
+{
+	(void)item;
+	switch (operation) {
+	case MENUOP_CHECKHIDDEN: return androidControlsCurrentPlayer() != 0;
+	case MENUOP_GET: return g_AndroidGameplayTouchEnabled;
+	case MENUOP_SET: g_AndroidGameplayTouchEnabled = data->checkbox.value ? 1 : 0; break;
+	}
+	return 0;
+}
+
+static MenuItemHandlerResult menuhandlerAndroidGameplayTouchOpacity(s32 operation, struct menuitem *item, union handlerdata *data)
+{
+	(void)item;
+	switch (operation) {
+	case MENUOP_CHECKHIDDEN: return androidControlsCurrentPlayer() != 0;
+	case MENUOP_GETSLIDER: data->slider.value = (s32)(g_AndroidGameplayTouchOpacity * 100.0f + 0.5f); break;
+	case MENUOP_SET: g_AndroidGameplayTouchOpacity = (f32)data->slider.value / 100.0f; break;
+	case MENUOP_GETSLIDERLABEL: sprintf(data->slider.label, "%d%%", data->slider.value); break;
+	}
+	return 0;
 }
 
 static MenuItemHandlerResult menuhandlerAndroidTouchLookMode(s32 operation, struct menuitem *item, union handlerdata *data)
@@ -84,7 +109,7 @@ static struct menuitem g_AndroidControllerSettingsMenuItems[];
 static MenuItemHandlerResult menuhandlerAndroidLookSensitivity(s32 operation, struct menuitem *item, union handlerdata *data)
 {
 	const s32 player = androidControlsCurrentPlayer();
-	const s32 axis = item - (g_AndroidControllerSettingsMenuItems + 1);
+	const s32 axis = item - (g_AndroidControllerSettingsMenuItems + 3);
 	f32 value;
 
 	if (axis < 0 || axis > 1) {
@@ -111,7 +136,7 @@ static MenuItemHandlerResult menuhandlerAndroidLookSensitivity(s32 operation, st
 
 static MenuItemHandlerResult menuhandlerAndroidTrackpadSensitivity(s32 operation, struct menuitem *item, union handlerdata *data)
 {
-	const s32 axis = item - (g_AndroidControllerSettingsMenuItems + 3);
+	const s32 axis = item - (g_AndroidControllerSettingsMenuItems + 5);
 	f32 *value;
 
 	if (axis < 0 || axis > 1) {
@@ -138,6 +163,8 @@ static MenuItemHandlerResult menuhandlerAndroidTrackpadSensitivity(s32 operation
 }
 
 static struct menuitem g_AndroidControllerSettingsMenuItems[] = {
+	{ MENUITEMTYPE_CHECKBOX, 0, MENUITEMFLAG_LITERAL_TEXT, (uintptr_t)"Gameplay Touch Controls", 0, menuhandlerAndroidGameplayTouchEnabled },
+	{ MENUITEMTYPE_SLIDER, 0, MENUITEMFLAG_LITERAL_TEXT | MENUITEMFLAG_SLIDER_WIDE, (uintptr_t)"Gameplay Touch Opacity", 100, menuhandlerAndroidGameplayTouchOpacity },
 	{
 		MENUITEMTYPE_DROPDOWN,
 		0,
@@ -222,6 +249,9 @@ static struct menudialogdef g_AndroidControllerSettingsMenuDialog = {
 	NULL,
 };
 
+s32 androidControlsGetGameplayTouchEnabled(void) { return g_AndroidGameplayTouchEnabled; }
+f32 androidControlsGetGameplayTouchOpacity(void) { return g_AndroidGameplayTouchOpacity; }
+
 s32 androidControlsGetTouchLookMode(void)
 {
 	return g_AndroidTouchLookMode;
@@ -249,6 +279,8 @@ f32 androidControlsGetTrackpadSensitivityY(void)
 
 PD_CONSTRUCTOR static void androidControlsConfigInit(void)
 {
+	configRegisterInt("Input.AndroidGameplayTouchEnabled", &g_AndroidGameplayTouchEnabled, 0, 1);
+	configRegisterFloat("Input.AndroidGameplayTouchOpacity", &g_AndroidGameplayTouchOpacity, 0.0f, 1.0f);
 	configRegisterInt("Input.AndroidTouchLookMode", &g_AndroidTouchLookMode, 0, 1);
 	configRegisterFloat("Input.AndroidTrackpadSensitivityX", &g_AndroidTrackpadSensitivityX, 0.0f, 4.0f);
 	configRegisterFloat("Input.AndroidTrackpadSensitivityY", &g_AndroidTrackpadSensitivityY, 0.0f, 4.0f);
