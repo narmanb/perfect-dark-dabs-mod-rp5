@@ -17,6 +17,16 @@
             android:layout_marginTop="10dp" android:textColor="#CCCCCC" android:textSize="15sp"/>
         <Button android:id="@+id/pickGeRomButton" android:layout_width="match_parent" android:layout_height="wrap_content"
             android:layout_marginTop="12dp" android:text="Select GoldenEye 007 ROM"/>
+        <View android:layout_width="match_parent" android:layout_height="1dp" android:layout_marginTop="24dp"
+            android:layout_marginBottom="20dp" android:background="#555555"/>
+        <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:text="MODS" android:textColor="#FFFFFF" android:textSize="20sp" android:textStyle="bold"/>
+        <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:layout_marginTop="8dp" android:text="Import, enable, disable and manage Perfect Dark mods before launching the game."
+            android:textColor="#CCCCCC" android:textSize="15sp"/>
+        <com.perfectdark.port.ModManagerButton
+            android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:layout_marginTop="12dp" android:text="Open Mod Manager"/>
         <Button android:id="@+id/playButton" android:layout_width="match_parent" android:layout_height="wrap_content"
             android:layout_marginTop="28dp" android:text="Play Perfect Dark" android:visibility="gone"/>
     </LinearLayout>
