@@ -3,7 +3,6 @@ package com.perfectdark.port;
 import androidx.appcompat.app.AppCompatActivity;
 import android.content.Intent;
 import android.net.Uri;
-import android.os.Build;
 import android.os.Bundle;
 import android.view.View;
 import android.widget.Button;
@@ -16,6 +15,7 @@ import androidx.annotation.Nullable;
 import androidx.appcompat.app.AlertDialog;
 
 import java.io.File;
+import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
@@ -29,6 +29,9 @@ import java.security.NoSuchAlgorithmException;
  */
 public class LauncherActivity extends AppCompatActivity {
     private static final String ROM_FILE_NAME = "pd.ntsc-final.z64";
+    private static final String ROM_TEMP_FILE_NAME = ROM_FILE_NAME + ".tmp";
+    private static final long EXPECTED_ROM_SIZE = 32L * 1024L * 1024L;
+
     // Primary: NTSC-U Rev 1 (v1.1) .z64 (recommended)
     private static final String MD5_NTSC_V11 = "e03b088b6ac9e0080440efed07c1e40f";
     // Secondary: NTSC-U v1.0 .z64 (not recommended, but optionally allowed)
@@ -53,42 +56,63 @@ public class LauncherActivity extends AppCompatActivity {
         pickRomButton.setOnClickListener(v -> openRomPicker());
 
         ensureDataDir();
+        cleanupInterruptedCopy();
 
         if (romExists()) {
-            File target = new File(new File(getExternalFilesDir(null), "data"), ROM_FILE_NAME);
+            File target = getRomFile();
             int hashStatus = checkRomHash(target);
             if (hashStatus == 0) {
                 startGame();
             } else if (hashStatus == 1) {
                 showV10WarningDialog(target);
             } else {
-                showHashMismatchDialog(target);
+                showHashMismatchDialog(target, safeMd5(target), target.length(), false);
             }
         } else {
             showMissingRomUi();
         }
     }
 
+    private File getDataDir() {
+        return new File(getExternalFilesDir(null), "data");
+    }
+
+    private File getRomFile() {
+        return new File(getDataDir(), ROM_FILE_NAME);
+    }
+
+    private File getTempRomFile() {
+        return new File(getDataDir(), ROM_TEMP_FILE_NAME);
+    }
+
     private void ensureDataDir() {
-        File dataDir = new File(getExternalFilesDir(null), "data");
-        if (!dataDir.exists()) {
+        File dataDir = getDataDir();
+        if (!dataDir.exists() && !dataDir.mkdirs()) {
+            Toast.makeText(this, "Unable to create game data folder", Toast.LENGTH_LONG).show();
+        }
+    }
+
+    private void cleanupInterruptedCopy() {
+        File temp = getTempRomFile();
+        if (temp.exists()) {
             //noinspection ResultOfMethodCallIgnored
-            dataDir.mkdirs();
+            temp.delete();
         }
     }
 
     private boolean romExists() {
-        File target = new File(new File(getExternalFilesDir(null), "data"), ROM_FILE_NAME);
+        File target = getRomFile();
         return target.exists() && target.length() > 0;
     }
 
     private void showMissingRomUi() {
         missingRomView.setVisibility(View.VISIBLE);
-        infoText.setText("ROM not found. Select your Perfect Dark NTSC (z64) ROM to proceed.\nIt will be copied to Android/data/com.perfectdark.dabsmod/files/data as " + ROM_FILE_NAME + ".");
+        infoText.setText("ROM not found. Select your Perfect Dark NTSC-U ROM.\n"
+                + "The filename does not matter. A verified copy will be stored as "
+                + ROM_FILE_NAME + ".");
     }
 
     private void openRomPicker() {
-        // Use SAF OpenDocument so we can persist read permission if supported.
         romPicker.launch(new String[]{"application/octet-stream", "*/*"});
     }
 
@@ -98,99 +122,161 @@ public class LauncherActivity extends AppCompatActivity {
             return;
         }
 
-        // Take persistable permission so we can read during copy
         final int flags = Intent.FLAG_GRANT_READ_URI_PERMISSION;
         try {
             getContentResolver().takePersistableUriPermission(uri, flags);
         } catch (Exception ignored) {
-            // Not critical; some providers don't support persistable perms
+            // Some providers do not support persistable permissions. The copy below still works.
         }
 
+        final CopyResult result;
         try {
-            copyRomToAppData(uri);
-        } catch (IOException e) {
-            Toast.makeText(this, "Failed to copy ROM: " + e.getMessage(), Toast.LENGTH_LONG).show();
+            result = copyAndVerifyRom(uri);
+        } catch (IOException | NoSuchAlgorithmException e) {
+            cleanupInterruptedCopy();
+            Toast.makeText(this, "Failed to import ROM: " + e.getMessage(), Toast.LENGTH_LONG).show();
             return;
         }
 
-        if (romExists()) {
-            File target = new File(new File(getExternalFilesDir(null), "data"), ROM_FILE_NAME);
-            int hashStatus = checkRomHash(target);
-            if (hashStatus == 0) {
-                Toast.makeText(this, "ROM verified — starting game", Toast.LENGTH_SHORT).show();
-                startGame();
-            } else if (hashStatus == 1) {
-                showV10WarningDialog(target);
-            } else {
-                showHashMismatchDialog(target);
-            }
+        if (result.hashStatus == 0) {
+            Toast.makeText(this, "NTSC-U v1.1 verified — starting game", Toast.LENGTH_SHORT).show();
+            startGame();
+        } else if (result.hashStatus == 1) {
+            showV10WarningDialog(getRomFile());
         } else {
-            Toast.makeText(this, "ROM copy failed", Toast.LENGTH_LONG).show();
+            // A wrong source is never installed over a previously verified ROM.
+            showHashMismatchDialog(getTempRomFile(), result.md5, result.bytes, true);
         }
     }
 
-    private void copyRomToAppData(Uri sourceUri) throws IOException {
-        File dataDir = new File(getExternalFilesDir(null), "data");
-        if (!dataDir.exists()) {
-            //noinspection ResultOfMethodCallIgnored
-            dataDir.mkdirs();
+    /**
+     * Copies the selected URI to a temporary file while hashing the exact bytes received.
+     * It then hashes the temporary file independently. Only a byte-for-byte verified copy
+     * replaces pd.ntsc-final.z64.
+     */
+    private CopyResult copyAndVerifyRom(Uri sourceUri) throws IOException, NoSuchAlgorithmException {
+        ensureDataDir();
+
+        File temp = getTempRomFile();
+        if (temp.exists() && !temp.delete()) {
+            throw new IOException("Could not clear previous temporary ROM copy");
         }
 
-        File target = new File(dataDir, ROM_FILE_NAME);
+        MessageDigest sourceDigest = MessageDigest.getInstance("MD5");
+        long bytesCopied = 0;
 
         try (InputStream in = getContentResolver().openInputStream(sourceUri);
-             FileOutputStream out = new FileOutputStream(target)) {
-            if (in == null) throw new IOException("Unable to open selected file");
-            byte[] buf = new byte[8192];
+             FileOutputStream out = new FileOutputStream(temp)) {
+            if (in == null) {
+                throw new IOException("Unable to open selected file");
+            }
+
+            byte[] buf = new byte[64 * 1024];
             int read;
             while ((read = in.read(buf)) != -1) {
+                if (read == 0) continue;
                 out.write(buf, 0, read);
+                sourceDigest.update(buf, 0, read);
+                bytesCopied += read;
             }
             out.flush();
+            out.getFD().sync();
         }
+
+        String sourceMd5 = toHex(sourceDigest.digest());
+
+        if (temp.length() != bytesCopied) {
+            throw new IOException("Copy size mismatch: read " + bytesCopied
+                    + " bytes but wrote " + temp.length());
+        }
+
+        String copiedMd5 = computeMd5(temp);
+        if (!sourceMd5.equalsIgnoreCase(copiedMd5)) {
+            throw new IOException("Copy verification failed: source MD5 " + sourceMd5
+                    + " but copied MD5 " + copiedMd5);
+        }
+
+        int status = classifyMd5(sourceMd5);
+        if (status < 0) {
+            return new CopyResult(status, sourceMd5, bytesCopied);
+        }
+
+        File target = getRomFile();
+        if (target.exists() && !target.delete()) {
+            throw new IOException("Could not replace existing ROM");
+        }
+        if (!temp.renameTo(target)) {
+            throw new IOException("Verified ROM could not be moved into the game data folder");
+        }
+
+        // One final independent verification of the installed file.
+        if (target.length() != bytesCopied) {
+            throw new IOException("Installed ROM size changed unexpectedly");
+        }
+        String installedMd5 = computeMd5(target);
+        if (!sourceMd5.equalsIgnoreCase(installedMd5)) {
+            throw new IOException("Installed ROM failed final verification");
+        }
+
+        return new CopyResult(status, installedMd5, bytesCopied);
     }
 
     private void startGame() {
-        // Hand off to SDL/MainActivity
         Intent intent = new Intent(this, MainActivity.class);
-        // Ensure we don’t come back here when user quits the game
         intent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_NEW_TASK);
         startActivity(intent);
         finish();
     }
 
-    // Returns: 0 = matches v1.1 (recommended), 1 = matches v1.0 (allowed), -1 = mismatch/error
+    // 0 = v1.1, 1 = v1.0, -1 = mismatch
+    private int classifyMd5(String md5) {
+        if (MD5_NTSC_V11.equalsIgnoreCase(md5)) return 0;
+        if (MD5_NTSC_V10.equalsIgnoreCase(md5)) return 1;
+        return -1;
+    }
+
     private int checkRomHash(File file) {
         try {
-            String md5 = computeMd5(file);
-            if (MD5_NTSC_V11.equalsIgnoreCase(md5)) return 0;
-            if (MD5_NTSC_V10.equalsIgnoreCase(md5)) return 1;
-            return -1;
+            return classifyMd5(computeMd5(file));
         } catch (Exception e) {
             Toast.makeText(this, "Hash check failed: " + e.getMessage(), Toast.LENGTH_SHORT).show();
             return -1;
         }
     }
 
-    private void showHashMismatchDialog(File target) {
-        String computed;
-        try {
-            computed = computeMd5(target);
-        } catch (Exception e) {
-            computed = "<error>";
+    private void showHashMismatchDialog(File file, String computed, long bytes, boolean selectedSource) {
+        String sizeText = bytes + " bytes";
+        if (bytes == EXPECTED_ROM_SIZE) {
+            sizeText += " (32 MiB)";
         }
 
+        String origin = selectedSource ? "Selected file" : "Stored ROM";
         new AlertDialog.Builder(this)
-                .setTitle("Wrong ROM version")
-                .setMessage("Expected NTSC-U v1.1 ROM (md5: " + MD5_NTSC_V11 + ")\nAlso allowed (not recommended): v1.0 (md5: " + MD5_NTSC_V10 + ")\n\nGot: " + computed + "\n\nPick a different .z64 ROM?")
+                .setTitle("ROM verification failed")
+                .setMessage(origin + " does not match the clean NTSC-U ROM expected by the port.\n\n"
+                        + "Expected v1.1 MD5:\n" + MD5_NTSC_V11 + "\n\n"
+                        + "Got:\n" + computed + "\n\n"
+                        + "Size: " + sizeText + "\n\n"
+                        + "The filename is not checked.")
                 .setPositiveButton("Pick another", (d, w) -> {
-                    // Remove the copied file to avoid confusion
-                    try { //noinspection ResultOfMethodCallIgnored
-                        target.delete();
-                    } catch (Exception ignored) {}
+                    if (selectedSource && file.exists()) {
+                        //noinspection ResultOfMethodCallIgnored
+                        file.delete();
+                    } else if (!selectedSource && file.exists()) {
+                        // Remove an invalid stored copy so it cannot be reused at next launch.
+                        //noinspection ResultOfMethodCallIgnored
+                        file.delete();
+                    }
+                    showMissingRomUi();
+                    openRomPicker();
+                })
+                .setNegativeButton("Cancel", (d, w) -> {
+                    if (selectedSource && file.exists()) {
+                        //noinspection ResultOfMethodCallIgnored
+                        file.delete();
+                    }
                     showMissingRomUi();
                 })
-                .setNegativeButton("Proceed anyway", (d, w) -> startGame())
                 .setCancelable(false)
                 .show();
     }
@@ -198,33 +284,60 @@ public class LauncherActivity extends AppCompatActivity {
     private void showV10WarningDialog(File target) {
         new AlertDialog.Builder(this)
                 .setTitle("NTSC v1.0 detected")
-                .setMessage("You selected NTSC-U v1.0 (not recommended).\nThe port targets v1.1; some content may not work.\n\nProceed with v1.0 or pick a different ROM?")
+                .setMessage("You selected NTSC-U v1.0 (not recommended).\n"
+                        + "The port targets v1.1; some content may not work.\n\n"
+                        + "Proceed with v1.0 or pick a different ROM?")
                 .setPositiveButton("Proceed", (d, w) -> startGame())
                 .setNegativeButton("Pick another", (d, w) -> {
-                    try { //noinspection ResultOfMethodCallIgnored
+                    try {
+                        //noinspection ResultOfMethodCallIgnored
                         target.delete();
                     } catch (Exception ignored) {}
                     showMissingRomUi();
+                    openRomPicker();
                 })
                 .setCancelable(false)
                 .show();
     }
 
+    private String safeMd5(File file) {
+        try {
+            return computeMd5(file);
+        } catch (Exception e) {
+            return "<error: " + e.getMessage() + ">";
+        }
+    }
+
     private String computeMd5(File file) throws IOException, NoSuchAlgorithmException {
         MessageDigest md = MessageDigest.getInstance("MD5");
-        byte[] buffer = new byte[8192];
-        int read;
-        try (InputStream in = new java.io.FileInputStream(file);
+        byte[] buffer = new byte[64 * 1024];
+        try (InputStream in = new FileInputStream(file);
              DigestInputStream din = new DigestInputStream(in, md)) {
-            while ((read = din.read(buffer)) != -1) {
-                // digest updated via DigestInputStream
+            while (din.read(buffer) != -1) {
+                // DigestInputStream updates md.
             }
         }
-        byte[] digest = md.digest();
+        return toHex(md.digest());
+    }
+
+    private String toHex(byte[] digest) {
         StringBuilder sb = new StringBuilder(digest.length * 2);
         for (byte b : digest) {
-            sb.append(String.format("%02x", b));
+            sb.append(Character.forDigit((b >>> 4) & 0x0f, 16));
+            sb.append(Character.forDigit(b & 0x0f, 16));
         }
         return sb.toString();
+    }
+
+    private static class CopyResult {
+        final int hashStatus;
+        final String md5;
+        final long bytes;
+
+        CopyResult(int hashStatus, String md5, long bytes) {
+            this.hashStatus = hashStatus;
+            this.md5 = md5;
+            this.bytes = bytes;
+        }
     }
 }
