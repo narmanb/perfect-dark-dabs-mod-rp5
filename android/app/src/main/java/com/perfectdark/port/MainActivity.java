@@ -20,7 +20,9 @@ import java.io.File;
 
 public class MainActivity extends SDLActivity {
     private TouchControls touchControls;
+    private MenuTouchOverlay menuTouchOverlay;
     private boolean menuTouchActive;
+    private boolean menuOverlayTouchActive;
     private OnBackInvokedCallback backInvokedCallback;
     private final Handler touchUiHandler = new Handler(Looper.getMainLooper());
 
@@ -88,11 +90,10 @@ public class MainActivity extends SDLActivity {
     }
 
     /**
-     * Gameplay gets our Android control layer. Menus are treated as a real
-     * absolute mouse instead of relying on SDL's touch-to-mouse emulation. That
-     * matters for Perfect Dark because closely stacked rows use the current
-     * mouse position and the click in the same game tick; a bare finger tap can
-     * otherwise activate the previously highlighted row.
+     * Gameplay gets the Android stick/button layer. Menus get a large D-pad,
+     * OK and Back fallback overlay, while taps outside those controls still use
+     * the direct absolute-mouse path. Physical controllers stay on SDL's normal
+     * controller path and are not synthesized or remapped here.
      */
     private void installTouchControls() {
         if (touchControls == null) {
@@ -102,8 +103,19 @@ public class MainActivity extends SDLActivity {
             touchControls.setGameplayActive(false);
         }
 
+        if (menuTouchOverlay == null) {
+            menuTouchOverlay = new MenuTouchOverlay(this, this::sendGameBack);
+            menuTouchOverlay.setMenuActive(true);
+        }
+
         if (mLayout != null && touchControls.getOverlayView().getParent() == null) {
             mLayout.addView(touchControls.getOverlayView(), new ViewGroup.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT,
+                    ViewGroup.LayoutParams.MATCH_PARENT));
+        }
+
+        if (mLayout != null && menuTouchOverlay.getParent() == null) {
+            mLayout.addView(menuTouchOverlay, new ViewGroup.LayoutParams(
                     ViewGroup.LayoutParams.MATCH_PARENT,
                     ViewGroup.LayoutParams.MATCH_PARENT));
         }
@@ -115,12 +127,33 @@ public class MainActivity extends SDLActivity {
                 final int action = event.getActionMasked();
 
                 // Keep an entire finger gesture on the path where it began. A
-                // menu tap can start a stage on ACTION_DOWN; routing ACTION_UP
-                // into gameplay after that would leave the synthetic mouse held.
+                // menu action can change native state on ACTION_DOWN, so moving
+                // the corresponding ACTION_UP to another handler would leave a
+                // synthetic key or mouse button held.
                 if (action == MotionEvent.ACTION_DOWN) {
                     boolean gameplay = nativeGameplayTouchActive();
-                    menuTouchActive = !gameplay;
+                    menuTouchActive = false;
+                    menuOverlayTouchActive = false;
                     touchControls.setGameplayActive(gameplay);
+                    menuTouchOverlay.setMenuActive(!gameplay);
+
+                    if (!gameplay) {
+                        if (menuTouchOverlay.handleTouch(event, width, height)) {
+                            menuOverlayTouchActive = true;
+                            return true;
+                        }
+
+                        menuTouchActive = true;
+                        return forwardMenuTouchAsMouse(event, width, height);
+                    }
+                }
+
+                if (menuOverlayTouchActive) {
+                    boolean handled = menuTouchOverlay.handleTouch(event, width, height);
+                    if (action == MotionEvent.ACTION_UP || action == MotionEvent.ACTION_CANCEL) {
+                        menuOverlayTouchActive = false;
+                    }
+                    return handled;
                 }
 
                 if (menuTouchActive) {
@@ -133,11 +166,14 @@ public class MainActivity extends SDLActivity {
 
                 boolean gameplay = nativeGameplayTouchActive();
                 touchControls.setGameplayActive(gameplay);
+                menuTouchOverlay.setMenuActive(!gameplay);
 
                 if (gameplay) {
                     return touchControls.onTouchEvent(event, width, height);
                 }
 
+                // This is mainly a defensive path for a native state transition
+                // between touch events. New menu gestures are classified above.
                 return forwardMenuTouchAsMouse(event, width, height);
             });
         }
@@ -200,7 +236,7 @@ public class MainActivity extends SDLActivity {
     }
 
     private void refreshTouchMode() {
-        if (touchControls == null || isFinishing()) {
+        if (touchControls == null || menuTouchOverlay == null || isFinishing()) {
             return;
         }
 
@@ -213,7 +249,9 @@ public class MainActivity extends SDLActivity {
             disableAndroidTextInput();
         }
 
-        touchControls.setGameplayActive(nativeGameplayTouchActive());
+        boolean gameplay = nativeGameplayTouchActive();
+        touchControls.setGameplayActive(gameplay);
+        menuTouchOverlay.setMenuActive(!gameplay);
     }
 
     private void disableAndroidTextInput() {
@@ -250,8 +288,8 @@ public class MainActivity extends SDLActivity {
 
     /**
      * Perfect Dark's PC cancel binding is right mouse, not Escape. Android Back
-     * therefore sends a synthetic right click. This works in dialogs such as
-     * Customize Character where Escape alone is not bound to CK_CANCEL.
+     * and the on-screen Back button therefore share this exact action. If SDL
+     * text input is somehow active, Back only exits that mode first.
      */
     private void sendGameBack() {
         if (nativeTextInputActive() || SDLActivity.isScreenKeyboardShown()) {
@@ -304,8 +342,12 @@ public class MainActivity extends SDLActivity {
     protected void onPause() {
         touchUiHandler.removeCallbacks(touchUiPoll);
         menuTouchActive = false;
+        menuOverlayTouchActive = false;
         if (touchControls != null) {
             touchControls.releaseAll();
+        }
+        if (menuTouchOverlay != null) {
+            menuTouchOverlay.releaseAll();
         }
         super.onPause();
     }
@@ -319,6 +361,9 @@ public class MainActivity extends SDLActivity {
         }
         if (touchControls != null) {
             touchControls.releaseAll();
+        }
+        if (menuTouchOverlay != null) {
+            menuTouchOverlay.releaseAll();
         }
         super.onDestroy();
         nativeDestroy();
