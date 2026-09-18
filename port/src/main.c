@@ -1,5 +1,6 @@
 #include <stdlib.h>
 #include <stdio.h>
+#include <string.h>
 #include <PR/ultratypes.h>
 #include <PR/ultrasched.h>
 #include <PR/os_message.h>
@@ -41,6 +42,76 @@
 #include "system.h"
 #include "utils.h"
 #include "gebean.h"
+
+#ifdef ANDROID
+#include <jni.h>
+#include <android/log.h>
+#include <unistd.h>
+#include <SDL.h>
+#include <SDL_main.h>
+
+static char g_androidDataPath[1024] = {0};
+static int g_androidInitialized = 0;
+
+JNIEXPORT jint JNICALL JNI_OnLoad(JavaVM *vm, void *reserved)
+{
+	(void)vm;
+	(void)reserved;
+	return JNI_VERSION_1_6;
+}
+
+JNIEXPORT void JNICALL
+Java_com_perfectdark_port_MainActivity_nativeInit(JNIEnv *env, jobject thiz, jstring dataPath)
+{
+	(void)thiz;
+	if (g_androidInitialized) {
+		return;
+	}
+
+	const char *path = (*env)->GetStringUTFChars(env, dataPath, NULL);
+	if (path) {
+		strncpy(g_androidDataPath, path, sizeof(g_androidDataPath) - 1);
+		g_androidDataPath[sizeof(g_androidDataPath) - 1] = '\0';
+		(*env)->ReleaseStringUTFChars(env, dataPath, path);
+	}
+	g_androidInitialized = 1;
+}
+
+JNIEXPORT void JNICALL
+Java_com_perfectdark_port_MainActivity_nativeDestroy(JNIEnv *env, jobject thiz)
+{
+	(void)env;
+	(void)thiz;
+	g_androidInitialized = 0;
+}
+
+int pd_main(int argc, const char **argv);
+
+int SDL_main(int argc, char *argv[])
+{
+	int timeout = 50;
+
+	while (!g_androidInitialized && timeout-- > 0) {
+		SDL_Delay(100);
+	}
+
+	if (!g_androidInitialized) {
+		__android_log_print(ANDROID_LOG_ERROR, "PerfectDarkDabs", "Android launcher did not initialize native storage");
+		return -1;
+	}
+
+	if (g_androidDataPath[0] && chdir(g_androidDataPath) != 0) {
+		__android_log_print(ANDROID_LOG_WARN, "PerfectDarkDabs", "Could not chdir to %s", g_androidDataPath);
+	}
+
+	return pd_main(argc, (const char **)argv);
+}
+
+const char *sysGetDataPath(void)
+{
+	return g_androidDataPath;
+}
+#endif
 
 u32 g_OsMemSize = 0;
 // Upstream's 16 is the N64's 8MB with room to spare. This fork spends memory the
@@ -185,7 +256,11 @@ static void mainApplySettingsRevision(void)
 	g_SettingsRevision = SETTINGS_REVISION;
 }
 
+#ifdef ANDROID
+int pd_main(int argc, const char **argv)
+#else
 int main(int argc, const char **argv)
+#endif
 {
 	sysInitArgs(argc, argv);
 
