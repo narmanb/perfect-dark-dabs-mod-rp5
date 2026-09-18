@@ -70,8 +70,10 @@ public class TouchControls {
 
     private static final float MOVE_THRESHOLD = 0.22f;
     private static final float LOOK_DEADZONE = 0.12f;
-    private static final float LOOK_SPEED_X = 8.0f;
-    private static final float LOOK_SPEED_Y = 6.5f;
+    // Full-stick speed is deliberately much higher than the first pass. The
+    // original 8/6.5 deltas felt effectively unusable on a phone-sized stick.
+    private static final float LOOK_SPEED_X = 32.0f;
+    private static final float LOOK_SPEED_Y = 26.0f;
     private static final float TRACKPAD_GAIN = 1.30f;
     private static final long LOOK_TICK_MS = 16L;
 
