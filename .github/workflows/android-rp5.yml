@@ -43,6 +43,9 @@ jobs:
       - name: Apply Post FX pass 3
         run: python3 android/apply-postfx-pass3.py
 
+      - name: Retune Post FX pass 3
+        run: python3 android/tune-postfx-pass3.py
+
       - name: Build debug APK
         working-directory: android
         shell: bash
