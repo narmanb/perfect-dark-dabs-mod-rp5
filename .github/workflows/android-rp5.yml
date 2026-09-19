@@ -34,6 +34,9 @@ jobs:
       - name: Apply Android post-processing extensions
         run: python3 android/apply-postfx.py
 
+      - name: Fix Post FX menu integration
+        run: python3 android/fix-postfx-menu.py
+
       - name: Build debug APK
         working-directory: android
         shell: bash
