@@ -24,6 +24,11 @@ Do not spend time faking these with screen brightness alone. Revisit them togeth
 - Heat/explosion distortion tied to actual world events
 - Event-aware glow for explosions, lasers and muzzle flashes
 
+## Android bug fixes / polish
+- Fix touch-control state after Android app resume: if the game is backgrounded/minimized during gameplay and then resumed, movement currently stops working and the whole screen behaves like the right/look stick. Physical controls are unaffected. On resume, explicitly reset/cancel stale touch pointers and rebuild the normal MOVE/LOOK touch regions/state.
+- Remove/hide the Recording tab from Dab's Mod Options for the Android build. It can be restored later if recording is reintroduced.
+- Redesign the Android launcher layout. The current launcher is functional but visually/layout-wise poor. Review the complete launcher flow and controls before implementing the redesign so the new layout is deliberate rather than incremental patchwork.
+
 ## Later presentation work
 - Cinematic bars
 - HUD scaling and visual options
