@@ -1218,7 +1218,7 @@ static GLint grade_loc_saturation, grade_loc_contrast, grade_loc_black;
 static int grade_width, grade_height;
 static bool grade_failed;
 
-static const char *grade_vs =
+static const char *grade_vs_desktop =
     "#version 130\n"
     "out vec2 vUV;\n"
     "void main() {\n"
@@ -1227,7 +1227,7 @@ static const char *grade_vs =
     "    gl_Position = vec4(p * 2.0 - 1.0, 0.0, 1.0);\n"
     "}\n";
 
-static const char *grade_fs =
+static const char *grade_fs_desktop =
     "#version 130\n"
     "uniform sampler2D uTex;\n"
     "uniform float uSaturation;\n"
@@ -1235,6 +1235,36 @@ static const char *grade_fs =
     "uniform float uBlack;\n"
     "in vec2 vUV;\n"
     "out vec4 oCol;\n"
+    "void main() {\n"
+    "    vec3 c = texture(uTex, vUV).rgb;\n"
+    "    c = max(c - uBlack, 0.0) / (1.0 - uBlack);\n"
+    "    float l = dot(c, vec3(0.2126, 0.7152, 0.0722));\n"
+    "    c = mix(vec3(l), c, uSaturation);\n"
+    "    c = (c - 0.5) * uContrast + 0.5;\n"
+    "    oCol = vec4(clamp(c, 0.0, 1.0), 1.0);\n"
+    "}\n";
+
+/* Android uses an OpenGL ES 3.x context. Keep the same full-screen pass but
+ * compile it as GLSL ES 3.00 instead of disabling colour grading entirely. */
+static const char *grade_vs_es =
+    "#version 300 es\n"
+    "precision highp float;\n"
+    "out vec2 vUV;\n"
+    "void main() {\n"
+    "    vec2 p = vec2(float((gl_VertexID << 1) & 2), float(gl_VertexID & 2));\n"
+    "    vUV = p;\n"
+    "    gl_Position = vec4(p * 2.0 - 1.0, 0.0, 1.0);\n"
+    "}\n";
+
+static const char *grade_fs_es =
+    "#version 300 es\n"
+    "precision mediump float;\n"
+    "uniform sampler2D uTex;\n"
+    "uniform float uSaturation;\n"
+    "uniform float uContrast;\n"
+    "uniform float uBlack;\n"
+    "in vec2 vUV;\n"
+    "layout(location = 0) out vec4 oCol;\n"
     "void main() {\n"
     "    vec3 c = texture(uTex, vUV).rgb;\n"
     "    c = max(c - uBlack, 0.0) / (1.0 - uBlack);\n"
@@ -1275,13 +1305,15 @@ static bool gfx_opengl_grade_init(void) {
     GLuint vs, fs;
     GLint ok = 0;
 
-    if (gl_es || GLVersion.major < 3 || !glad_glGenFramebuffers || !glad_glBlitFramebuffer ||
+    if (GLVersion.major < 3 || !glad_glGenFramebuffers || !glad_glBlitFramebuffer ||
         !glad_glGenVertexArrays || !glad_glCreateShader || !glad_glDrawArrays) {
         return false;
     }
 
-    vs = gfx_opengl_grade_compile(GL_VERTEX_SHADER, grade_vs);
-    fs = vs ? gfx_opengl_grade_compile(GL_FRAGMENT_SHADER, grade_fs) : 0;
+    const char *vs_src = gl_es ? grade_vs_es : grade_vs_desktop;
+    const char *fs_src = gl_es ? grade_fs_es : grade_fs_desktop;
+    vs = gfx_opengl_grade_compile(GL_VERTEX_SHADER, vs_src);
+    fs = vs ? gfx_opengl_grade_compile(GL_FRAGMENT_SHADER, fs_src) : 0;
     if (!vs || !fs) {
         if (vs) glDeleteShader(vs);
         if (fs) glDeleteShader(fs);
@@ -1291,7 +1323,7 @@ static bool gfx_opengl_grade_init(void) {
     grade_prog = glCreateProgram();
     glAttachShader(grade_prog, vs);
     glAttachShader(grade_prog, fs);
-    glBindFragDataLocation(grade_prog, 0, "oCol");
+    if (!gl_es) glBindFragDataLocation(grade_prog, 0, "oCol");
     glLinkProgram(grade_prog);
     glGetProgramiv(grade_prog, GL_LINK_STATUS, &ok);
     glDeleteShader(vs);
@@ -1353,7 +1385,7 @@ static void gfx_opengl_grade_frame(void) {
     }
 
     if (!grade_prog && !gfx_opengl_grade_init()) {
-        sysLogPrintf(LOG_WARNING, "GL: Vivid Colours needs desktop GL 3.0, off");
+        sysLogPrintf(LOG_WARNING, "GL: post-process colour grading unavailable on this GL/GLES driver, off");
         grade_failed = true;
         return;
     }
