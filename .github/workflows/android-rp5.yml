@@ -92,6 +92,9 @@ jobs:
       - name: Restore two-sided SMAA neighborhood resolve
         run: python3 android/fix-smaa-two-sided-resolve.py
 
+      - name: Finalize AA menu and SMAA High preset
+        run: python3 android/finalize-aa-modes.py
+
       - name: Validate generated SMAA on OpenGL ES
         shell: bash
         run: |
