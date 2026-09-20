@@ -60,14 +60,17 @@ jobs:
           python3 - <<'PY'
           from pathlib import Path
           p = Path("port/fast3d/smaa_ref/SMAA.hlsl")
-          src = p.read_text()
+          # Upstream SMAA.hlsl contains a few Windows-1252 punctuation bytes in comments.
+          # Normalize those comments to UTF-8 before embedding the shader text in C++.
+          src = p.read_bytes().decode("cp1252")
           delimiter = "SMAAREF"
           if f"){delimiter}\"" in src:
               raise SystemExit("SMAA raw-string delimiter collision")
           Path("port/fast3d/smaa_ref/SMAASource.h").write_text(
               "#pragma once\n"
               "// Generated from the pinned iryoku/smaa SMAA.hlsl reference implementation.\n"
-              f"static const char *smaa_reference_source = R\"{delimiter}(\n{src}\n){delimiter}\";\n"
+              f"static const char *smaa_reference_source = R\"{delimiter}(\n{src}\n){delimiter}\";\n",
+              encoding="utf-8",
           )
           PY
 
