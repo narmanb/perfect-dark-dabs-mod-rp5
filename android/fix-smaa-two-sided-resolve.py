@@ -89,19 +89,17 @@ if count != 1:
     raise SystemExit(f"two-sided SMAA resolve: expected one old neighborhood implementation, found {count}")
 text = text.replace(old, new, 1)
 
-# The finished menu uses mode 3 for standard SMAA (the upstream Ultra preset)
-# and mode 4 for our intentionally stronger SMAA High preset.  High is still
-# the same reference SMAA algorithm; only the supported quality parameters are
-# pushed beyond Ultra.  The official demo supports up to 112 H/V search steps
-# and 20 diagonal steps, so 64/20 remains inside the reference implementation's
-# supported tuning range.
+# Mode 3 is standard SMAA using the upstream Ultra preset. Mode 4 is our
+# stronger SMAA High preset. It stays within the reference implementation's
+# documented/custom tuning range: the demo exposes up to 112 H/V search steps
+# and 20 diagonal search steps.
 old_preset = r'''static std::string gfx_opengl_smaa_fragment_source(bool ultra, int pass) {
     std::string src = gl_es ? "#version 300 es\nprecision highp float;\n" : "#version 130\n";
     src += "#define SMAA_GLSL_3\n";
     src += "#define SMAA_INCLUDE_VS 0\n";
     src += "#define SMAA_INCLUDE_PS 1\n";
     src += ultra ? "#define SMAA_PRESET_ULTRA\n" : "#define SMAA_PRESET_HIGH\n";
-    src += "#define SMAA_RT_METRICS uSmaaMetrics;\n";
+    src += "#define SMAA_RT_METRICS uSmaaMetrics\n";
 '''
 new_preset = r'''static std::string gfx_opengl_smaa_fragment_source(bool high, int pass) {
     std::string src = gl_es ? "#version 300 es\nprecision highp float;\n" : "#version 130\n";
@@ -116,7 +114,7 @@ new_preset = r'''static std::string gfx_opengl_smaa_fragment_source(bool high, i
     } else {
         src += "#define SMAA_PRESET_ULTRA\n";
     }
-    src += "#define SMAA_RT_METRICS uSmaaMetrics;\n";
+    src += "#define SMAA_RT_METRICS uSmaaMetrics\n";
 '''
 count = text.count(old_preset)
 if count != 1:
@@ -202,7 +200,6 @@ count = options.count(old_rows)
 if count != 1:
     raise SystemExit(f"SMAA cleanup: expected one diagnostic menu row block, found {count}")
 options = options.replace(old_rows, "", 1)
-
 OPTIONS.write_text(options)
 
 api = API.read_text()
