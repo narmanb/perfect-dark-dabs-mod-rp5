@@ -14,10 +14,9 @@ def replace_once(text: str, old: str, new: str, label: str) -> str:
 
 
 # A literal status LABEL is not focusable, so the Perfect Dark menu scroller can
-# leave it partly behind the bottom scissor when it sits near Back.  Make the
-# status a real one-option dropdown instead.  The cursor can land on it, which
-# forces normal row geometry and focus-driven scrolling, while GETOPTIONTEXT
-# still returns the live runtime string every time the row is rendered.
+# leave it partly behind the bottom scissor when it sits near Back. Make the
+# diagnostics real one-option dropdowns instead. The cursor can land on either
+# row, which forces normal row geometry and focus-driven scrolling.
 options = OPTIONS.read_text()
 old_rows = (
     '\t{ MENUITEMTYPE_DROPDOWN, 0, MENUITEMFLAG_LITERAL_TEXT, (uintptr_t)"SMAA View", 0, menuhandlerSmaaView },\n'
@@ -25,10 +24,11 @@ old_rows = (
 )
 new_rows = (
     '\t{ MENUITEMTYPE_DROPDOWN, 0, MENUITEMFLAG_LITERAL_TEXT, (uintptr_t)"SMAA View", 0, menuhandlerSmaaView },\n'
-    '\t// Focusable on purpose: selecting this row scrolls the entire diagnostic into view.\n'
+    '\t// Focusable on purpose: these rows scroll completely into view.\n'
     '\t{ MENUITEMTYPE_DROPDOWN, 0, MENUITEMFLAG_LITERAL_TEXT, (uintptr_t)"SMAA Stats", 0, menuhandlerSmaaStatus },\n'
+    '\t{ MENUITEMTYPE_DROPDOWN, 0, MENUITEMFLAG_LITERAL_TEXT, (uintptr_t)"SMAA Detail", 0, menuhandlerSmaaDetail },\n'
 )
-options = replace_once(options, old_rows, new_rows, "SMAA View/status row pair")
+options = replace_once(options, old_rows, new_rows, "SMAA View/status rows")
 
 old_handler = '''static MenuItemHandlerResult menuhandlerSmaaView(s32 operation, struct menuitem *item, union handlerdata *data)
 {
@@ -42,20 +42,61 @@ old_handler = '''static MenuItemHandlerResult menuhandlerSmaaView(s32 operation,
     return 0;
 }
 '''
-new_handler = '''static MenuItemHandlerResult menuhandlerSmaaStatus(s32 operation, struct menuitem *item, union handlerdata *data)
+new_handler = '''static s32 smaaParseStatus(unsigned *edges, unsigned *weights, unsigned *weightmax,
+        double *weightavg, unsigned *changed, unsigned *deltamax, double *deltaavg)
 {
+    return sscanf(gfx_smaa_status,
+        "E:%u W:%u WM:%u WA:%lf D:%u DM:%u DA:%lf",
+        edges, weights, weightmax, weightavg, changed, deltamax, deltaavg) == 7;
+}
+
+static MenuItemHandlerResult menuhandlerSmaaStatus(s32 operation, struct menuitem *item, union handlerdata *data)
+{
+    static char text[96];
     switch (operation) {
     case MENUOP_GETOPTIONCOUNT:
         data->dropdown.value = 1;
         break;
-    case MENUOP_GETOPTIONTEXT:
-        return (intptr_t)gfx_smaa_status;
+    case MENUOP_GETOPTIONTEXT: {
+        unsigned e = 0, w = 0, wm = 0, d = 0, dm = 0;
+        double wa = 0.0, da = 0.0;
+        if (smaaParseStatus(&e, &w, &wm, &wa, &d, &dm, &da)) {
+            snprintf(text, sizeof(text), "MS%d E%u W%u", videoGetMSAA(), e, w);
+        } else {
+            snprintf(text, sizeof(text), "MS%d %s", videoGetMSAA(), gfx_smaa_status);
+        }
+        return (intptr_t)text;
+    }
     case MENUOP_GETSELECTEDINDEX:
         data->dropdown.value = 0;
         break;
     case MENUOP_SET:
-        // Read-only diagnostic row.  It is a dropdown solely so it is focusable
-        // and participates in the menu's scrolling/layout calculations.
+        break;
+    }
+    return 0;
+}
+
+static MenuItemHandlerResult menuhandlerSmaaDetail(s32 operation, struct menuitem *item, union handlerdata *data)
+{
+    static char text[96];
+    switch (operation) {
+    case MENUOP_GETOPTIONCOUNT:
+        data->dropdown.value = 1;
+        break;
+    case MENUOP_GETOPTIONTEXT: {
+        unsigned e = 0, w = 0, wm = 0, d = 0, dm = 0;
+        double wa = 0.0, da = 0.0;
+        if (smaaParseStatus(&e, &w, &wm, &wa, &d, &dm, &da)) {
+            snprintf(text, sizeof(text), "WM%u WA%.1f DM%u DA%.1f", wm, wa, dm, da);
+        } else {
+            snprintf(text, sizeof(text), "Waiting...");
+        }
+        return (intptr_t)text;
+    }
+    case MENUOP_GETSELECTEDINDEX:
+        data->dropdown.value = 0;
+        break;
+    case MENUOP_SET:
         break;
     }
     return 0;
@@ -135,11 +176,11 @@ new_debug = '''    if (uDebugView == 1) {
 '''
 gfx = replace_once(gfx, old_debug, new_debug, "resolve diagnostic shader block")
 
-# Keep every possible value short enough for the menu's right-hand value
-# column.  The detailed renderer log still keeps the long-form diagnostic.
+# Keep failure/transition strings short. The detailed successful audit stays in
+# gfx_smaa_status and the menu handlers split it into two compact rows.
 gfx = replace_once(gfx, '"Post FX initialization failed (see log)"', '"INIT FAIL (log)"', "compact init failure")
 gfx = replace_once(gfx, 'gfx_post_aa >= 3 ? "SMAA starting..." : "SMAA not selected"', 'gfx_post_aa >= 3 ? "Starting..." : "Not active"', "compact selection status")
 gfx = replace_once(gfx, '"SMAA failed: %s (Lite fallback)"', '"FAIL:%s -> Lite"', "compact fallback status")
 GFX.write_text(gfx)
 
-print("SMAA diagnostics: focusable Stats row installed; clean debug views and compact live status enabled")
+print("SMAA diagnostics: gameplay-latched counters, MSAA level and blend-weight magnitude rows enabled")
