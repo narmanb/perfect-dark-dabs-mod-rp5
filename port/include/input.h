@@ -157,6 +157,12 @@ void inputControllerSetAxisScale(s32 cidx, s32 stick, s32 axis, f32 value);
 f32 inputControllerGetAxisDeadzone(s32 cidx, s32 stick, s32 axis);
 void inputControllerSetAxisDeadzone(s32 cidx, s32 stick, s32 axis, f32 value);
 
+// physical right-stick response shaping
+s32 inputControllerGetRightStickCurve(s32 cidx);
+void inputControllerSetRightStickCurve(s32 cidx, s32 curve);
+f32 inputControllerGetRightStickOuterThreshold(s32 cidx);
+void inputControllerSetRightStickOuterThreshold(s32 cidx, f32 value);
+
 // writes array of up to INPUT_MAX_CONNECTED_CONTROLLERS controller IDs
 // for all the controllers available on this machine into out if it's not NULL
 // returns number of IDs that would've been written (or were written if out is not NULL)
