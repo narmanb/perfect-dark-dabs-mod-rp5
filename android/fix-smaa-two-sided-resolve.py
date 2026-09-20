@@ -4,7 +4,6 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 GFX = ROOT / "port/fast3d/gfx_opengl.cpp"
 OPTIONS = ROOT / "port/src/optionsmenu.c"
-API = ROOT / "port/fast3d/gfx_api.h"
 
 text = GFX.read_text()
 
@@ -87,98 +86,19 @@ new = r'''vec4 smaaNeighborhoodLinearLight(vec2 texcoord, vec4 unusedOffset) {
 count = text.count(old)
 if count != 1:
     raise SystemExit(f"two-sided SMAA resolve: expected one old neighborhood implementation, found {count}")
-text = text.replace(old, new, 1)
 
-# Mode 3 is standard SMAA using the upstream Ultra preset. Mode 4 is our
-# stronger SMAA High preset. It stays within the reference implementation's
-# documented/custom tuning range: the demo exposes up to 112 H/V search steps
-# and 20 diagonal search steps.
-old_preset = r'''static std::string gfx_opengl_smaa_fragment_source(bool ultra, int pass) {
-    std::string src = gl_es ? "#version 300 es\nprecision highp float;\n" : "#version 130\n";
-    src += "#define SMAA_GLSL_3\n";
-    src += "#define SMAA_INCLUDE_VS 0\n";
-    src += "#define SMAA_INCLUDE_PS 1\n";
-    src += ultra ? "#define SMAA_PRESET_ULTRA\n" : "#define SMAA_PRESET_HIGH\n";
-    src += "#define SMAA_RT_METRICS uSmaaMetrics\n";
-'''
-new_preset = r'''static std::string gfx_opengl_smaa_fragment_source(bool high, int pass) {
-    std::string src = gl_es ? "#version 300 es\nprecision highp float;\n" : "#version 130\n";
-    src += "#define SMAA_GLSL_3\n";
-    src += "#define SMAA_INCLUDE_VS 0\n";
-    src += "#define SMAA_INCLUDE_PS 1\n";
-    if (high) {
-        src += "#define SMAA_THRESHOLD 0.025\n";
-        src += "#define SMAA_MAX_SEARCH_STEPS 64\n";
-        src += "#define SMAA_MAX_SEARCH_STEPS_DIAG 20\n";
-        src += "#define SMAA_CORNER_ROUNDING 25\n";
-    } else {
-        src += "#define SMAA_PRESET_ULTRA\n";
-    }
-    src += "#define SMAA_RT_METRICS uSmaaMetrics\n";
-'''
-count = text.count(old_preset)
-if count != 1:
-    raise SystemExit(f"SMAA High: expected one reference preset selector, found {count}")
-text = text.replace(old_preset, new_preset, 1)
-
-old_link = '''static GLuint gfx_opengl_smaa_link(bool ultra, int pass, const char *label) {
-    std::string fs = gfx_opengl_smaa_fragment_source(ultra, pass);
-'''
-new_link = '''static GLuint gfx_opengl_smaa_link(bool high, int pass, const char *label) {
-    std::string fs = gfx_opengl_smaa_fragment_source(high, pass);
-'''
-count = text.count(old_link)
-if count != 1:
-    raise SystemExit(f"SMAA High: expected one link helper, found {count}")
-text = text.replace(old_link, new_link, 1)
-
-old_init = '''    for (int q = 0; q < 2; q++) {
-        const bool ultra = q == 1;
-        smaa_edge_prog[q] = gfx_opengl_smaa_link(ultra, 0, ultra ? "SMAA Ultra edge" : "SMAA High edge");
-        smaa_weight_prog[q] = gfx_opengl_smaa_link(ultra, 1, ultra ? "SMAA Ultra weights" : "SMAA High weights");
-        smaa_neighborhood_prog[q] = gfx_opengl_smaa_link(ultra, 2, ultra ? "SMAA Ultra neighborhood" : "SMAA High neighborhood");
-        smaa_ready[q] = smaa_edge_prog[q] && smaa_weight_prog[q] && smaa_neighborhood_prog[q];
-        if (!smaa_ready[q]) {
-            sysLogPrintf(LOG_WARNING, "GL: %s reference SMAA unavailable; SMAA Lite fallback will be used", ultra ? "Ultra" : "High");
-        }
-    }
-'''
-new_init = '''    for (int q = 0; q < 2; q++) {
-        const bool high = q == 1;
-        smaa_edge_prog[q] = gfx_opengl_smaa_link(high, 0, high ? "SMAA High edge" : "SMAA edge");
-        smaa_weight_prog[q] = gfx_opengl_smaa_link(high, 1, high ? "SMAA High weights" : "SMAA weights");
-        smaa_neighborhood_prog[q] = gfx_opengl_smaa_link(high, 2, high ? "SMAA High neighborhood" : "SMAA neighborhood");
-        smaa_ready[q] = smaa_edge_prog[q] && smaa_weight_prog[q] && smaa_neighborhood_prog[q];
-        if (!smaa_ready[q]) {
-            sysLogPrintf(LOG_WARNING, "GL: %s unavailable; SMAA Lite fallback will be used", high ? "SMAA High" : "SMAA");
-        }
-    }
-'''
-count = text.count(old_init)
-if count != 1:
-    raise SystemExit(f"SMAA High: expected one reference initialization loop, found {count}")
-text = text.replace(old_init, new_init, 1)
-
-old_ready_comment = "static bool smaa_ready[2]; // 0 = High/Multi, 1 = Ultra"
-new_ready_comment = "static bool smaa_ready[2]; // 0 = SMAA (upstream Ultra), 1 = SMAA High (custom above-Ultra)"
-count = text.count(old_ready_comment)
-if count != 1:
-    raise SystemExit(f"SMAA High: expected one ready-slot comment, found {count}")
-text = text.replace(old_ready_comment, new_ready_comment, 1)
-
-GFX.write_text(text)
+GFX.write_text(text.replace(old, new, 1))
 print("two-sided SMAA resolve: restored normalized two-neighbor reference resolve with OpenGL directional mapping")
-print("SMAA High: mode 3 = upstream Ultra; mode 4 = threshold .025, search 64, diagonal 20, corner 25")
 
-# Finalize the user-facing AA menu without changing the 0..4 config range:
-#   0 Off, 1 FXAA, 2 SMAA Lite, 3 SMAA (upstream Ultra),
-#   4 SMAA High (custom above-Ultra preset).
-# Keep diagnostic shader/readback machinery compiled for CI/future debugging,
-# but remove the diagnostic/boost controls from the normal Post FX menu.
+# Finalize the user-facing AA menu without renumbering any stored config value:
+#   0 Off, 1 FXAA, 2 SMAA Lite, 3 SMAA High, 4 SMAA (upstream Ultra preset).
+# Keep the diagnostic shader/readback machinery compiled for CI and future
+# troubleshooting, but remove all diagnostic/boost controls from the normal
+# Post FX menu so the production UI contains only real AA modes.
 options = OPTIONS.read_text()
 
 old_opts = 'static const char *opts[] = { "Off", "FXAA", "SMAA Lite", "SMAA Multi", "SMAA Ultra" };'
-new_opts = 'static const char *opts[] = { "Off", "FXAA", "SMAA Lite", "SMAA", "SMAA High" };'
+new_opts = 'static const char *opts[] = { "Off", "FXAA", "SMAA Lite", "SMAA High", "SMAA" };'
 count = options.count(old_opts)
 if count != 1:
     raise SystemExit(f"SMAA cleanup: expected one AA option list, found {count}")
@@ -200,14 +120,6 @@ count = options.count(old_rows)
 if count != 1:
     raise SystemExit(f"SMAA cleanup: expected one diagnostic menu row block, found {count}")
 options = options.replace(old_rows, "", 1)
+
 OPTIONS.write_text(options)
-
-api = API.read_text()
-old_api = "extern int gfx_post_aa;            // 0 off, 1 FXAA, 2 SMAA Lite, 3 SMAA Multi (High), 4 SMAA Ultra"
-new_api = "extern int gfx_post_aa;            // 0 off, 1 FXAA, 2 SMAA Lite, 3 SMAA (Ultra), 4 SMAA High (custom)"
-count = api.count(old_api)
-if count != 1:
-    raise SystemExit(f"SMAA cleanup: expected one generated API mode comment, found {count}")
-API.write_text(api.replace(old_api, new_api, 1))
-
-print("SMAA cleanup: final Post AA menu is Off / FXAA / SMAA Lite / SMAA / SMAA High")
+print("SMAA cleanup: renamed High/current SMAA modes and removed diagnostic/boost rows from Post FX")
