@@ -98,6 +98,9 @@ jobs:
       - name: Hide desktop-only recording and updater UI
         run: python3 android/cleanup-android-menus.py
 
+      - name: Apply physical right-stick aiming overhaul
+        run: python3 android/fix-right-stick-aiming.py
+
       - name: Validate generated SMAA on OpenGL ES
         shell: bash
         run: |
