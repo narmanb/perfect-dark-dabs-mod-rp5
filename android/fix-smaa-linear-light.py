@@ -17,12 +17,12 @@ void main() {
 new = r'''in vec2 vUV;
 out vec4 oCol;
 
-// SMAA's reference integration requires the color input read and output write
-// of the neighborhood pass to be sRGB, while edges/weights remain non-sRGB.
-// Android's post-FX source and default framebuffer are ordinary RGBA8, so do
-// that transfer explicitly here. The previous gamma-space blend was valid as
-// a fallback according to upstream, but it makes high-contrast coverage much
-// darker/weaker than the reference linear-light resolve.
+// Upstream SMAA requires the neighborhood pass's color read and output write
+// to use sRGB semantics. Edges, weights and lookup textures stay non-sRGB.
+// Android's post-FX source is GL_RGBA8 and the normal window path has no sRGB
+// texture view, so emulate an sRGB texture fetch exactly: decode each source
+// texel to linear *before* bilinear filtering, blend in linear light, then
+// encode the final RGB back to sRGB for the ordinary RGBA8 back buffer.
 float smaaSrgbToLinear1(float c) {
     return c <= 0.04045 ? c / 12.92 : pow((c + 0.055) / 1.055, 2.4);
 }
@@ -36,7 +36,31 @@ vec3 smaaSrgbToLinear(vec3 c) {
 vec3 smaaLinearToSrgb(vec3 c) {
     return vec3(smaaLinearToSrgb1(c.r), smaaLinearToSrgb1(c.g), smaaLinearToSrgb1(c.b));
 }
+
+// Equivalent to a GL_SRGB8_ALPHA8 linear-filtered texture read, while keeping
+// the same RGBA8 storage that the luma edge pass must read without sRGB decode.
+vec4 smaaSampleColorLinear(vec2 uv) {
+    vec2 pixel = uv * uSmaaMetrics.zw - vec2(0.5);
+    ivec2 p0 = ivec2(floor(pixel));
+    ivec2 p1 = p0 + ivec2(1);
+    vec2 f = fract(pixel);
+    ivec2 hi = ivec2(uSmaaMetrics.zw) - ivec2(1);
+    ivec2 p00 = clamp(p0, ivec2(0), hi);
+    ivec2 p11 = clamp(p1, ivec2(0), hi);
+
+    vec4 g00 = texelFetch(uColorTex, ivec2(p00.x, p00.y), 0);
+    vec4 g10 = texelFetch(uColorTex, ivec2(p11.x, p00.y), 0);
+    vec4 g01 = texelFetch(uColorTex, ivec2(p00.x, p11.y), 0);
+    vec4 g11 = texelFetch(uColorTex, ivec2(p11.x, p11.y), 0);
+    vec4 l00 = vec4(smaaSrgbToLinear(g00.rgb), g00.a);
+    vec4 l10 = vec4(smaaSrgbToLinear(g10.rgb), g10.a);
+    vec4 l01 = vec4(smaaSrgbToLinear(g01.rgb), g01.a);
+    vec4 l11 = vec4(smaaSrgbToLinear(g11.rgb), g11.a);
+    return mix(mix(l00, l10, f.x), mix(l01, l11, f.x), f.y);
+}
+
 vec4 smaaNeighborhoodLinearLight(vec2 texcoord, vec4 offset) {
+    // This is the upstream SMAANeighborhoodBlendingPS weight/channel mapping.
     vec4 a;
     a.x = texture(uBlendTex, offset.xy).a; // Right
     a.y = texture(uBlendTex, offset.zw).g; // Top
@@ -54,10 +78,9 @@ vec4 smaaNeighborhoodLinearLight(vec2 texcoord, vec4 offset) {
     blendingWeight /= dot(blendingWeight, vec2(1.0));
 
     vec4 blendingCoord = blendingOffset * vec4(uSmaaMetrics.xy, -uSmaaMetrics.xy) + texcoord.xyxy;
-    vec4 c0 = textureLod(uColorTex, blendingCoord.xy, 0.0);
-    vec4 c1 = textureLod(uColorTex, blendingCoord.zw, 0.0);
-    vec3 linear = blendingWeight.x * smaaSrgbToLinear(c0.rgb)
-                + blendingWeight.y * smaaSrgbToLinear(c1.rgb);
+    vec4 c0 = smaaSampleColorLinear(blendingCoord.xy);
+    vec4 c1 = smaaSampleColorLinear(blendingCoord.zw);
+    vec3 linear = blendingWeight.x * c0.rgb + blendingWeight.y * c1.rgb;
     float alpha = dot(blendingWeight, vec2(c0.a, c1.a));
     return vec4(smaaLinearToSrgb(linear), alpha);
 }
@@ -72,7 +95,7 @@ count = text.count(old)
 if count != 1:
     raise SystemExit(f"linear-light SMAA: expected one neighborhood wrapper, found {count}")
 GFX.write_text(text.replace(old, new, 1))
-print("linear-light SMAA: corrected neighborhood sRGB read/write semantics")
+print("linear-light SMAA: corrected neighborhood sRGB read/filter/write semantics")
 
 # The production test previously used straight interpolation of 8-bit display
 # values as its coverage reference. That rewards gamma-space blending, which is
