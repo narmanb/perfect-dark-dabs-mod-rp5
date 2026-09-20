@@ -92,15 +92,15 @@ replace_once(
 )
 replace_once(
     "vec3 target = (((l + r) * 0.5) * w.r + ((t + b) * 0.5) * w.g) / sum;",
-    "vec3 target = (((l + r) * 0.5) * w.r + ((t + b) * 0.5) * w.g) / sum;\n"
-    "    if (uQuality >= 4) {\n"
-    "        vec3 l2 = texture(uTex, vUV - vec2(uTexel.x * 2.0, 0.0)).rgb;\n"
-    "        vec3 r2 = texture(uTex, vUV + vec2(uTexel.x * 2.0, 0.0)).rgb;\n"
-    "        vec3 t2 = texture(uTex, vUV - vec2(0.0, uTexel.y * 2.0)).rgb;\n"
-    "        vec3 b2 = texture(uTex, vUV + vec2(0.0, uTexel.y * 2.0)).rgb;\n"
-    "        vec3 wide = (((l2 + r2) * 0.5) * w.r + ((t2 + b2) * 0.5) * w.g) / sum;\n"
-    "        target = mix(target, wide, 0.42);\n"
-    "    }",
+    r'''vec3 target = (((l + r) * 0.5) * w.r + ((t + b) * 0.5) * w.g) / sum;\\n" \\
+    "    if (uQuality >= 4) {\\n" \\
+    "        vec3 l2 = texture(uTex, vUV - vec2(uTexel.x * 2.0, 0.0)).rgb;\\n" \\
+    "        vec3 r2 = texture(uTex, vUV + vec2(uTexel.x * 2.0, 0.0)).rgb;\\n" \\
+    "        vec3 t2 = texture(uTex, vUV - vec2(0.0, uTexel.y * 2.0)).rgb;\\n" \\
+    "        vec3 b2 = texture(uTex, vUV + vec2(0.0, uTexel.y * 2.0)).rgb;\\n" \\
+    "        vec3 wide = (((l2 + r2) * 0.5) * w.r + ((t2 + b2) * 0.5) * w.g) / sum;\\n" \\
+    "        target = mix(target, wide, 0.42);\\n" \\
+    "    }''',
     "Ultra two-pixel neighborhood",
 )
 replace_once(
