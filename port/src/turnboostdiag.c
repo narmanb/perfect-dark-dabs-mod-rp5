@@ -149,15 +149,16 @@ Gfx *turnBoostDiagRender(Gfx *gdl)
     snprintf(lines[6], sizeof lines[6], "Ratio body %.2f  camera %.2f", diag[p].bodyRatio, diag[p].camRatio);
     gSPSetExtraGeometryModeEXT(gdl++, g_HudAlignModeL);
     gdl = text0f153628(gdl);
-    s32 y = 40;
+    const s32 lineStep = 14;
+    s32 y = 36;
     for (s32 i = 0; i < 7; i++) {
         s32 x = 24, height, width;
         textMeasure(&height, &width, lines[i], g_CharsHandelGothicXs, g_FontHandelGothicXs, 0);
-        if (width + x > viGetWidth() - 12 || y + height > viGetHeight() - 12) continue;
+        if (width + x > viGetWidth() - 12 || y + lineStep > viGetHeight() - 12) continue;
         s32 drawy = y;
         gdl = textRender(gdl, &x, &drawy, lines[i], g_CharsHandelGothicXs,
             g_FontHandelGothicXs, 0xffffffff, 0x000000c0, viGetWidth(), viGetHeight(), 0, 0);
-        y += height + 2;
+        y += lineStep;
     }
     gdl = text0f153780(gdl);
     gSPClearExtraGeometryModeEXT(gdl++, g_HudAlignModeL);
