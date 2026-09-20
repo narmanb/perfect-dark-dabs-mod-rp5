@@ -108,6 +108,9 @@ jobs:
       - name: Fix generated turn boost menu indentation
         run: python3 android/fix-turn-boost-menu-tabs.py
 
+      - name: Fix turn boost ramp feedback
+        run: python3 android/fix-turn-boost-ramp.py
+
       - name: Validate generated SMAA on OpenGL ES
         shell: bash
         run: |
