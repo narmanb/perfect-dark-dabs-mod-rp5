@@ -95,6 +95,9 @@ jobs:
       - name: Finalize AA menu and SMAA High preset
         run: python3 android/finalize-aa-modes.py
 
+      - name: Hide desktop-only recording and updater UI
+        run: python3 android/cleanup-android-menus.py
+
       - name: Validate generated SMAA on OpenGL ES
         shell: bash
         run: |
