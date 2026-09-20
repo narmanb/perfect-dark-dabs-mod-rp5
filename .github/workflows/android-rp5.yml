@@ -86,6 +86,9 @@ jobs:
       - name: Correct SMAA OpenGL coordinate orientation
         run: python3 android/fix-smaa-gl-orientation.py
 
+      - name: Restore two-sided SMAA neighborhood resolve
+        run: python3 android/fix-smaa-two-sided-resolve.py
+
       - name: Validate generated SMAA on OpenGL ES
         shell: bash
         run: |
