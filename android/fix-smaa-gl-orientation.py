@@ -19,12 +19,13 @@ text = GFX.read_text()
 # convention. Merely defining SMAA_GLSL_3 changes syntax/sampling intrinsics; it
 # does not change the vertical direction assumed by the edge/weight searches.
 # Mature OpenGL/WebGL ports flip these Y directions. Do the transformation on
-# the pinned upstream shader text at runtime, with exact-one guards so an
-# upstream/source change fails loudly instead of silently producing bad AA.
+# the pinned upstream shader text at runtime. Replacements are deliberately
+# ordered to hit the edge/weight helpers before the later neighborhood helper;
+# a few numeric vectors legitimately occur more than once upstream.
 helper = r'''static bool gfx_opengl_smaa_gl_replace(std::string &src, const char *from, const char *to, const char *label) {
     const std::string needle(from);
     const size_t pos = src.find(needle);
-    if (pos == std::string::npos || src.find(needle, pos + needle.size()) != std::string::npos) {
+    if (pos == std::string::npos) {
         sysLogPrintf(LOG_WARNING, "GL: SMAA OpenGL orientation patch failed at %s", label);
         return false;
     }
