@@ -391,5 +391,185 @@ patch_grade_block(
     "restore SMAA texture units",
 )
 
+
+# Keep the runtime state/diagnostics readable rather than nesting C++ in Python.
+replace_once(
+    "static void gfx_opengl_grade_free(void) {\n",
+    (ROOT / "android/smaa-state.inc").read_text() + "\n" +
+    (ROOT / "android/smaa-diagnostics.inc").read_text() + "\n" +
+    "static void gfx_opengl_grade_free(void) {\n",
+    "state guard and stage diagnostics",
+)
+replace_file_once("port/fast3d/gfx_api.h",
+    "extern int gfx_post_aa;            // 0 off, 1 FXAA, 2 SMAA Lite, 3 SMAA Multi (High), 4 SMAA Ultra\n",
+    "extern int gfx_post_aa;            // 0 off, 1 FXAA, 2 SMAA Lite, 3 SMAA Multi (High), 4 SMAA Ultra\n"
+    "extern int gfx_smaa_debug;         // session-only: normal, edges, weights, resolve, difference\n"
+    "extern char gfx_smaa_status[96];   // actual runtime path and readback counters\n",
+    "SMAA diagnostics interface")
+replace_file_once("port/fast3d/gfx_pc.cpp", "int gfx_post_aa = 0;\n",
+    'int gfx_post_aa = 0;\nint gfx_smaa_debug = 0;\nchar gfx_smaa_status[96] = "SMAA not selected";\n',
+    "SMAA diagnostics globals")
+
+replace_once(r'"#version 300 es\nprecision highp float;\n" : "#version 130\n"',
+    r'"#version 300 es\nprecision highp float;\nprecision highp int;\nprecision highp sampler2D;\n" : "#version 130\n"',
+    "explicit GLES sampler precision")
+# Use the upstream offset helpers verbatim as well as the upstream pixel shaders.
+replace_once(r'src += "#define SMAA_INCLUDE_VS 0\n";', r'src += "#define SMAA_INCLUDE_VS 1\n";', "reference offsets enabled")
+replace_once('''    offset[0] = uSmaaMetrics.xyxy * vec4(-1.0, 0.0, 0.0, -1.0) + vUV.xyxy;
+    offset[1] = uSmaaMetrics.xyxy * vec4( 1.0, 0.0, 0.0,  1.0) + vUV.xyxy;
+    offset[2] = uSmaaMetrics.xyxy * vec4(-2.0, 0.0, 0.0, -2.0) + vUV.xyxy;
+''', '    SMAAEdgeDetectionVS(vUV, offset);\n', "reference edge offsets")
+replace_once('''    vec2 pixcoord = vUV * uSmaaMetrics.zw;
+    vec4 offset[3];
+    offset[0] = uSmaaMetrics.xyxy * vec4(-0.25, -0.125,  1.25, -0.125) + vUV.xyxy;
+    offset[1] = uSmaaMetrics.xyxy * vec4(-0.125, -0.25, -0.125,  1.25) + vUV.xyxy;
+    offset[2] = uSmaaMetrics.xxyy * (vec4(-2.0, 2.0, -2.0, 2.0) * float(SMAA_MAX_SEARCH_STEPS))
+              + vec4(offset[0].xz, offset[1].yw);
+''', '''    vec2 pixcoord;
+    vec4 offset[3];
+    SMAABlendingWeightCalculationVS(vUV, pixcoord, offset);
+''', "reference weight offsets")
+replace_once('''uniform sampler2D uBlendTex;
+in vec2 vUV;
+''', '''uniform sampler2D uBlendTex;
+uniform sampler2D uEdges;
+uniform int uDebugView;
+in vec2 vUV;
+''', "diagnostic shader interface")
+replace_once('''    vec4 offset = uSmaaMetrics.xyxy * vec4(1.0, 0.0, 0.0, 1.0) + vUV.xyxy;
+    oCol = SMAANeighborhoodBlendingPS(vUV, offset, uColorTex, uBlendTex);
+''', '''    vec4 offset;
+    SMAANeighborhoodBlendingVS(vUV, offset);
+    vec4 resolved = SMAANeighborhoodBlendingPS(vUV, offset, uColorTex, uBlendTex);
+    oCol = resolved;
+    if (uDebugView == 1) {
+        oCol = vec4(texture(uEdges, vUV).rg, 0.0, 1.0);
+    } else if (uDebugView == 2) {
+        vec4 w = texture(uBlendTex, vUV);
+        oCol = vec4(max(w.r, w.b), max(w.g, w.a), max(w.b, w.a), 1.0);
+    } else if (uDebugView == 4) {
+        oCol = vec4(abs(resolved.rgb - texture(uColorTex, vUV).rgb) * 8.0, 1.0);
+    }
+''', "reference resolve offsets and diagnostic views")
+
+compile_helper = r'''static GLuint gfx_opengl_post_compile(GLenum type, const char *src, const char *label) {
+    GLuint shader = glCreateShader(type);
+    glShaderSource(shader, 1, &src, NULL);
+    glCompileShader(shader);
+    GLint ok = 0;
+    glGetShaderiv(shader, GL_COMPILE_STATUS, &ok);
+    if (!ok) {
+        GLint length = 0;
+        glGetShaderiv(shader, GL_INFO_LOG_LENGTH, &length);
+        std::vector<char> log(length > 1 ? length : 1, 0);
+        glGetShaderInfoLog(shader, (GLsizei)log.size(), NULL, log.data());
+        sysLogPrintf(LOG_WARNING, "GL: %s %s compile failed: %s", label,
+            type == GL_VERTEX_SHADER ? "vertex" : "fragment", log.data());
+        glDeleteShader(shader);
+        return 0;
+    }
+    return shader;
+}
+
+'''
+replace_once("static GLuint gfx_opengl_post_link(", compile_helper + "static GLuint gfx_opengl_post_link(", "label shader compiler failures")
+replace_once('''    GLuint vs = gfx_opengl_grade_compile(GL_VERTEX_SHADER, vs_src);
+    GLuint fs = vs ? gfx_opengl_grade_compile(GL_FRAGMENT_SHADER, fs_src) : 0;
+''', '''    GLuint vs = gfx_opengl_post_compile(GL_VERTEX_SHADER, vs_src, label);
+    GLuint fs = vs ? gfx_opengl_post_compile(GL_FRAGMENT_SHADER, fs_src, label) : 0;
+''', "compile named stages")
+
+# The old save ran AFTER grade_init had overwritten the active game texture.
+# RAII also covers initialization failure, separate read/draw FBOs, sampler
+# overrides, color write masks and pixel unpack state.
+start = text.index("    if (!grade_prog && !gfx_opengl_grade_init()) {", text.index("static void gfx_opengl_grade_frame(void)"))
+end = text.index("    if (!gfx_opengl_grade_target(width, height)) {", start)
+text = text[:start] + '''    PostFxState saved_state;
+    if (!grade_prog && !gfx_opengl_grade_init()) {
+        sysLogPrintf(LOG_WARNING, "GL: post-process initialization failed");
+        snprintf(gfx_smaa_status, 96, "Post FX initialization failed (see log)");
+        grade_failed = true;
+        return;
+    }
+
+''' + text[end:]
+start = text.index("    if (was_blend) glEnable(GL_BLEND);", text.index("static void gfx_opengl_grade_frame(void)"))
+end = text.index("\n}\n\nstatic void gfx_opengl_end_frame", start)
+text = text[:start] + "    // saved_state restores every touched binding even on early return.\n" + text[end:]
+
+patch_grade_block("static void gfx_opengl_grade_frame(void) {\n", '''static void gfx_opengl_grade_frame(void) {
+    static int last_mode = -1, last_view = -1, last_width = -1, last_height = -1;
+    static uint32_t selected_frame = 0;
+    const bool selection_changed = last_mode != gfx_post_aa || last_view != gfx_smaa_debug;
+    if (selection_changed) {
+        last_mode = gfx_post_aa;
+        last_view = gfx_smaa_debug;
+        selected_frame = frame_count;
+        if (!grade_failed) snprintf(gfx_smaa_status, 96, "%s", gfx_post_aa >= 3 ? "SMAA starting..." : "SMAA not selected");
+        sysLogPrintf(LOG_NOTE, "Post AA: requested mode=%d debug=%d frame=%u", gfx_post_aa, gfx_smaa_debug, frame_count);
+    }
+''', "audit setting reaches frame path")
+patch_grade_block("    PostFxState saved_state;\n", '''    if (last_width != width || last_height != height) {
+        last_width = width; last_height = height;
+        selected_frame = frame_count;
+    }
+    const bool audit_now = frame_count - selected_frame == 2 || frame_count - selected_frame == 120;
+    PostFxState saved_state;
+''', "audit after transition and steady state")
+patch_grade_block('''        const bool run_smaa = gfx_post_aa >= 3 && smaa_ready[smaa_quality];
+''', '''        const bool run_smaa = gfx_post_aa >= 3 && gfx_post_aa <= 4 && smaa_ready[smaa_quality];
+        if (gfx_post_aa >= 3 && !run_smaa) {
+            const char *stage = !smaa_edge_prog[smaa_quality] ? "edges" :
+                !smaa_weight_prog[smaa_quality] ? "weights" :
+                !smaa_neighborhood_prog[smaa_quality] ? "resolve" : "targets";
+            snprintf(gfx_smaa_status, 96, "SMAA failed: %s (Lite fallback)", stage);
+        }
+        if (selection_changed || audit_now) {
+            sysLogPrintf(LOG_NOTE, "SMAA routing: mode=%d ready=%d size=%dx%d source=0 copy=%u/%u color=%u/%u edges=%u/%u weights=%u/%u output=0",
+                gfx_post_aa, run_smaa, width, height, grade_fbo, grade_tex,
+                smaa_fbo[0], smaa_tex[0], smaa_fbo[1], smaa_tex[1], smaa_fbo[2], smaa_tex[2]);
+        }
+''', "expose fallback and exact framebuffer routing")
+patch_grade_block('''            glUniform1i(glGetUniformLocation(neighborhood_prog, "uBlendTex"), 1);
+''', '''            glUniform1i(glGetUniformLocation(neighborhood_prog, "uBlendTex"), 1);
+            glActiveTexture(GL_TEXTURE2);
+            glBindTexture(GL_TEXTURE_2D, smaa_tex[1]);
+            glUniform1i(glGetUniformLocation(neighborhood_prog, "uEdges"), 2);
+            glUniform1i(glGetUniformLocation(neighborhood_prog, "uDebugView"), 0);
+''', "bind diagnostic inputs without feedback")
+patch_grade_block('''            glUniform4f(glGetUniformLocation(neighborhood_prog, "uSmaaMetrics"), inv_w, inv_h, (float)width, (float)height);
+            glDrawArrays(GL_TRIANGLES, 0, 3);
+''', '''            glUniform4f(glGetUniformLocation(neighborhood_prog, "uSmaaMetrics"), inv_w, inv_h, (float)width, (float)height);
+            glDrawArrays(GL_TRIANGLES, 0, 3);
+            if (audit_now) gfx_opengl_smaa_audit(width, height);
+            if (gfx_smaa_debug != 0) {
+                glUniform1i(glGetUniformLocation(neighborhood_prog, "uDebugView"), gfx_smaa_debug);
+                glDrawArrays(GL_TRIANGLES, 0, 3);
+            }
+''', "audit final framebuffer and expose selected view")
+
+diagnostic_menu = r'''static MenuItemHandlerResult menuhandlerSmaaView(s32 operation, struct menuitem *item, union handlerdata *data)
+{
+    static const char *opts[] = { "Normal", "Edges", "Weights", "Resolved", "Difference x8" };
+    switch (operation) {
+    case MENUOP_GETOPTIONCOUNT: data->dropdown.value = ARRAYCOUNT(opts); break;
+    case MENUOP_GETOPTIONTEXT: return (intptr_t)opts[data->dropdown.value];
+    case MENUOP_SET: gfx_smaa_debug = data->dropdown.value; break;
+    case MENUOP_GETSELECTEDINDEX: data->dropdown.value = gfx_smaa_debug; break;
+    }
+    return 0;
+}
+
+'''
+replace_file_once("port/src/optionsmenu.c", "static MenuItemHandlerResult menuhandlerPostFxAA(",
+    diagnostic_menu + "static MenuItemHandlerResult menuhandlerPostFxAA(", "SMAA diagnostic selector")
+replace_file_once("port/src/optionsmenu.c",
+    '\t{ MENUITEMTYPE_DROPDOWN, 0, MENUITEMFLAG_LITERAL_TEXT, (uintptr_t)"Post AA", 0, menuhandlerPostFxAA },\n',
+    '\t{ MENUITEMTYPE_DROPDOWN, 0, MENUITEMFLAG_LITERAL_TEXT, (uintptr_t)"Post AA", 0, menuhandlerPostFxAA },\n'
+    '\t{ MENUITEMTYPE_DROPDOWN, 0, MENUITEMFLAG_LITERAL_TEXT, (uintptr_t)"SMAA View", 0, menuhandlerSmaaView },\n'
+    '\t{ MENUITEMTYPE_LABEL, 0, MENUITEMFLAG_LITERAL_TEXT, (uintptr_t)gfx_smaa_status, 0, NULL },\n',
+    "show runtime SMAA status")
+
 GFX.write_text(text)
 print("reference SMAA: official High/Ultra pipeline applied after all post FX")
+

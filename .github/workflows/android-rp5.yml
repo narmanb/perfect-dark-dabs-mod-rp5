@@ -77,6 +77,24 @@ jobs:
       - name: Apply reference SMAA final pass
         run: python3 android/apply-smaa-reference.py
 
+      - name: Validate generated SMAA on OpenGL ES
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y libegl1 libgl1-mesa-dri python3-numpy g++
+          /usr/bin/python3 android/tests/verify-smaa.py 2>&1 | tee smaa-validation.log
+          python3 - <<'PY'
+          import hashlib, json, os
+          from pathlib import Path
+          paths = ["port/fast3d/gfx_opengl.cpp", "port/src/optionsmenu.c"]
+          Path("smaa-validation/build.json").write_text(json.dumps({
+              "commit": os.environ["GITHUB_SHA"],
+              "run_number": int(os.environ["GITHUB_RUN_NUMBER"]),
+              "generated_sha256": {p: hashlib.sha256(Path(p).read_bytes()).hexdigest() for p in paths},
+          }, indent=2) + "\n")
+          PY
+
       - name: Build debug APK
         working-directory: android
         shell: bash
@@ -86,6 +104,28 @@ jobs:
           ./gradlew assembleDebug --stacktrace --no-daemon 2>&1 | tee ../android-build.log
           status=${PIPESTATUS[0]}
           exit "$status"
+
+      - name: Verify APK identity and signature
+        shell: bash
+        run: |
+          set -euo pipefail
+          APK="android/app/build/outputs/apk/debug/app-debug.apk"
+          "$ANDROID_HOME/build-tools/34.0.0/aapt" dump badging "$APK" | sed -n '1p'
+          "$ANDROID_HOME/build-tools/34.0.0/apksigner" verify --print-certs "$APK"
+          sha256sum "$APK"
+
+      - name: Upload generated renderer and GLES evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: smaa-diagnostics-run${{ github.run_number }}
+          path: |
+            smaa-validation.log
+            smaa-validation/*.json
+            smaa-validation/*.frag
+            port/fast3d/gfx_opengl.cpp
+            port/src/optionsmenu.c
+          if-no-files-found: error
 
       - name: Upload build log
         if: always()

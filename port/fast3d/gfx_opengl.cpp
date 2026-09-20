@@ -1100,15 +1100,18 @@ static void gfx_opengl_init_extensions(void) {
 }
 
 static void gfx_opengl_init(void) {
-    if (!gladLoadGLLoader(gl_load_proc) || glGetString == NULL || glEnable == NULL) {
-        sysFatalSetupError("Could not load OpenGL.\nReported SDL error: %s", SDL_GetError());
-    }
-
-    // check if we're using ES or core, which have more limited feature sets
+    // Determine the API before loading its functions. GLES 3.0 has sampler
+    // objects (among other ES-core entry points) that desktop GL 3.0 does not.
+    // The desktop loader silently leaves these pointers null on ES contexts.
     int val = 0;
     SDL_GL_GetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, &val);
     gl_core_profile = (val == SDL_GL_CONTEXT_PROFILE_CORE);
     gl_es = (val == SDL_GL_CONTEXT_PROFILE_ES);
+
+    const int loaded = gl_es ? gladLoadGLES2Loader(gl_load_proc) : gladLoadGLLoader(gl_load_proc);
+    if (!loaded || glGetString == NULL || glEnable == NULL) {
+        sysFatalSetupError("Could not load OpenGL.\nReported SDL error: %s", SDL_GetError());
+    }
 
     gfx_opengl_init_extensions();
 
@@ -2349,3 +2352,4 @@ struct GfxRenderingAPI gfx_opengl_api = {
     gfx_opengl_capture_drain,
     gfx_opengl_capture_stop
 };
+
