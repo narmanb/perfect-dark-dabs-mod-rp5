@@ -424,6 +424,8 @@ static MenuItemHandlerResult menuhandlerStickSpeed(s32 operation, struct menuite
 static MenuItemHandlerResult menuhandlerStickDeadzone(s32 operation, struct menuitem *item, union handlerdata *data);
 static MenuItemHandlerResult menuhandlerRightStickCurve(s32 operation, struct menuitem *item, union handlerdata *data);
 static MenuItemHandlerResult menuhandlerRightStickOuterThreshold(s32 operation, struct menuitem *item, union handlerdata *data);
+static MenuItemHandlerResult menuhandlerRightStickAcceleration(s32 operation, struct menuitem *item, union handlerdata *data);
+static MenuItemHandlerResult menuhandlerRightStickSmoothing(s32 operation, struct menuitem *item, union handlerdata *data);
 
 struct menuitem g_ExtendedStickMenuItems[] = {
 	{
@@ -507,6 +509,14 @@ struct menuitem g_ExtendedStickMenuItems[] = {
 		(uintptr_t)"RStick Outer Threshold", 50, menuhandlerRightStickOuterThreshold,
 	},
 	{
+		MENUITEMTYPE_SLIDER, 0, MENUITEMFLAG_LITERAL_TEXT | MENUITEMFLAG_SLIDER_WIDE,
+		(uintptr_t)"RStick Acceleration", 100, menuhandlerRightStickAcceleration,
+	},
+	{
+		MENUITEMTYPE_SLIDER, 0, MENUITEMFLAG_LITERAL_TEXT | MENUITEMFLAG_SLIDER_WIDE,
+		(uintptr_t)"RStick Smoothing", 75, menuhandlerRightStickSmoothing,
+	},
+	{
 		MENUITEMTYPE_SEPARATOR,
 		0,
 		0,
@@ -579,6 +589,26 @@ static MenuItemHandlerResult menuhandlerRightStickOuterThreshold(s32 operation, 
 	case MENUOP_GETSLIDER: data->slider.value = (inputControllerGetRightStickOuterThreshold(g_ExtMenuPlayer) - 0.50f) * 100.f + 0.5f; break;
 	case MENUOP_SET: inputControllerSetRightStickOuterThreshold(g_ExtMenuPlayer, 0.50f + (f32)data->slider.value / 100.f); break;
 	case MENUOP_GETSLIDERLABEL: sprintf(data->slider.label, "%d%%", 50 + data->slider.value); break;
+	}
+	return 0;
+}
+
+static MenuItemHandlerResult menuhandlerRightStickAcceleration(s32 operation, struct menuitem *item, union handlerdata *data)
+{
+	switch (operation) {
+	case MENUOP_GETSLIDER: data->slider.value = inputControllerGetRightStickAcceleration(g_ExtMenuPlayer) * 100.f + 0.5f; break;
+	case MENUOP_SET: inputControllerSetRightStickAcceleration(g_ExtMenuPlayer, (f32)data->slider.value / 100.f); break;
+	case MENUOP_GETSLIDERLABEL: sprintf(data->slider.label, "%d%%", data->slider.value); break;
+	}
+	return 0;
+}
+
+static MenuItemHandlerResult menuhandlerRightStickSmoothing(s32 operation, struct menuitem *item, union handlerdata *data)
+{
+	switch (operation) {
+	case MENUOP_GETSLIDER: data->slider.value = inputControllerGetRightStickSmoothing(g_ExtMenuPlayer) * 100.f + 0.5f; break;
+	case MENUOP_SET: inputControllerSetRightStickSmoothing(g_ExtMenuPlayer, (f32)data->slider.value / 100.f); break;
+	case MENUOP_GETSLIDERLABEL: sprintf(data->slider.label, "%d%%", data->slider.value); break;
 	}
 	return 0;
 }
