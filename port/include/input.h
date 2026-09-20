@@ -162,6 +162,10 @@ s32 inputControllerGetRightStickCurve(s32 cidx);
 void inputControllerSetRightStickCurve(s32 cidx, s32 curve);
 f32 inputControllerGetRightStickOuterThreshold(s32 cidx);
 void inputControllerSetRightStickOuterThreshold(s32 cidx, f32 value);
+f32 inputControllerGetRightStickAcceleration(s32 cidx);
+void inputControllerSetRightStickAcceleration(s32 cidx, f32 value);
+f32 inputControllerGetRightStickSmoothing(s32 cidx);
+void inputControllerSetRightStickSmoothing(s32 cidx, f32 value);
 
 // writes array of up to INPUT_MAX_CONNECTED_CONTROLLERS controller IDs
 // for all the controllers available on this machine into out if it's not NULL
