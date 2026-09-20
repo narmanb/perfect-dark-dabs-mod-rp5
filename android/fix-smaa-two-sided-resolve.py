@@ -3,6 +3,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 GFX = ROOT / "port/fast3d/gfx_opengl.cpp"
+OPTIONS = ROOT / "port/src/optionsmenu.c"
 
 text = GFX.read_text()
 
@@ -88,3 +89,37 @@ if count != 1:
 
 GFX.write_text(text.replace(old, new, 1))
 print("two-sided SMAA resolve: restored normalized two-neighbor reference resolve with OpenGL directional mapping")
+
+# Finalize the user-facing AA menu without renumbering any stored config value:
+#   0 Off, 1 FXAA, 2 SMAA Lite, 3 SMAA High, 4 SMAA (upstream Ultra preset).
+# Keep the diagnostic shader/readback machinery compiled for CI and future
+# troubleshooting, but remove all diagnostic/boost controls from the normal
+# Post FX menu so the production UI contains only real AA modes.
+options = OPTIONS.read_text()
+
+old_opts = 'static const char *opts[] = { "Off", "FXAA", "SMAA Lite", "SMAA Multi", "SMAA Ultra" };'
+new_opts = 'static const char *opts[] = { "Off", "FXAA", "SMAA Lite", "SMAA High", "SMAA" };'
+count = options.count(old_opts)
+if count != 1:
+    raise SystemExit(f"SMAA cleanup: expected one AA option list, found {count}")
+options = options.replace(old_opts, new_opts, 1)
+
+handler_start = options.find("static s32 smaaParseStatus(")
+handler_end = options.find("static MenuItemHandlerResult menuhandlerPostFxAA", handler_start)
+if handler_start < 0 or handler_end < 0:
+    raise SystemExit("SMAA cleanup: generated diagnostic handler block not found")
+options = options[:handler_start] + options[handler_end:]
+
+old_rows = (
+    '\t{ MENUITEMTYPE_DROPDOWN, 0, MENUITEMFLAG_LITERAL_TEXT, (uintptr_t)"SMAA View", 0, menuhandlerSmaaView },\n'
+    '\t// Focusable on purpose: these rows scroll completely into view.\n'
+    '\t{ MENUITEMTYPE_DROPDOWN, 0, MENUITEMFLAG_LITERAL_TEXT, (uintptr_t)"SMAA Stats", 0, menuhandlerSmaaStatus },\n'
+    '\t{ MENUITEMTYPE_DROPDOWN, 0, MENUITEMFLAG_LITERAL_TEXT, (uintptr_t)"SMAA Detail", 0, menuhandlerSmaaDetail },\n'
+)
+count = options.count(old_rows)
+if count != 1:
+    raise SystemExit(f"SMAA cleanup: expected one diagnostic menu row block, found {count}")
+options = options.replace(old_rows, "", 1)
+
+OPTIONS.write_text(options)
+print("SMAA cleanup: renamed High/current SMAA modes and removed diagnostic/boost rows from Post FX")
