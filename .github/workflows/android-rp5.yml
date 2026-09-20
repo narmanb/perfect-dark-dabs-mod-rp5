@@ -1,5 +1,5 @@
 name: Android RP5 Build
-# Build trigger after SMAA Ultra shader quoting fix.
+# Reference SMAA High/Ultra runs as the final post-processing stage.
 
 on:
   push:
@@ -47,14 +47,32 @@ jobs:
       - name: Retune Post FX pass 3
         run: python3 android/tune-postfx-pass3.py
 
-      - name: Prepare Post FX pass 4
-        run: python3 android/disambiguate-postfx-pass4.py
+      - name: Fetch pinned SMAA reference assets
+        shell: bash
+        run: |
+          set -euo pipefail
+          SMAA_REF="71c806a838bdd7d517df19192a20f0c61b3ca29d"
+          SMAA_DIR="port/fast3d/smaa_ref"
+          mkdir -p "$SMAA_DIR"
+          curl -fsSL "https://raw.githubusercontent.com/iryoku/smaa/${SMAA_REF}/SMAA.hlsl" -o "$SMAA_DIR/SMAA.hlsl"
+          curl -fsSL "https://raw.githubusercontent.com/iryoku/smaa/${SMAA_REF}/Textures/AreaTex.h" -o "$SMAA_DIR/AreaTex.h"
+          curl -fsSL "https://raw.githubusercontent.com/iryoku/smaa/${SMAA_REF}/Textures/SearchTex.h" -o "$SMAA_DIR/SearchTex.h"
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path("port/fast3d/smaa_ref/SMAA.hlsl")
+          src = p.read_text()
+          delimiter = "SMAAREF"
+          if f"){delimiter}\"" in src:
+              raise SystemExit("SMAA raw-string delimiter collision")
+          Path("port/fast3d/smaa_ref/SMAASource.h").write_text(
+              "#pragma once\n"
+              "// Generated from the pinned iryoku/smaa SMAA.hlsl reference implementation.\n"
+              f"static const char *smaa_reference_source = R\"{delimiter}(\n{src}\n){delimiter}\";\n"
+          )
+          PY
 
-      - name: Apply Post FX pass 4
-        run: python3 android/apply-postfx-pass4.py
-
-      - name: Strengthen Post FX pass 4
-        run: python3 android/tune-postfx-pass4-strong.py
+      - name: Apply reference SMAA final pass
+        run: python3 android/apply-smaa-reference.py
 
       - name: Build debug APK
         working-directory: android
