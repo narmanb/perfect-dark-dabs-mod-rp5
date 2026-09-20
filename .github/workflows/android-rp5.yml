@@ -32,6 +32,9 @@ jobs:
           yes | "$SDKMANAGER" --licenses >/dev/null || true
           "$SDKMANAGER" "platforms;android-34" "build-tools;34.0.0" "cmake;3.22.1" "ndk;26.1.10909125"
 
+      - name: Preserve Android touch routing after resume
+        run: python3 android/fix-touch-resume.py
+
       - name: Apply Android post-processing extensions
         run: python3 android/apply-postfx.py
 
