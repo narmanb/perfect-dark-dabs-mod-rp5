@@ -83,6 +83,9 @@ jobs:
       - name: Correct SMAA neighborhood color space
         run: python3 android/fix-smaa-linear-light.py
 
+      - name: Correct SMAA OpenGL coordinate orientation
+        run: python3 android/fix-smaa-gl-orientation.py
+
       - name: Validate generated SMAA on OpenGL ES
         shell: bash
         run: |
