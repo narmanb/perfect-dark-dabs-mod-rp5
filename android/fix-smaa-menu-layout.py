@@ -13,29 +13,23 @@ def replace_once(text: str, old: str, new: str, label: str) -> str:
     return text.replace(old, new, 1)
 
 
-# Keep the detailed runtime status visible, but do not leave a mutable,
-# non-focusable label between the last selectable diagnostic and Back.  With
-# the status immediately above SMAA View, focus-driven scrolling brings the
-# status and selector into view together while the selector/separator/Back
-# spacing remains stable.
+# A literal status LABEL is not focusable, so the Perfect Dark menu scroller can
+# leave it partly behind the bottom scissor when it sits near Back.  Make the
+# status a real one-option dropdown instead.  The cursor can land on it, which
+# forces normal row geometry and focus-driven scrolling, while GETOPTIONTEXT
+# still returns the live runtime string every time the row is rendered.
 options = OPTIONS.read_text()
 old_rows = (
     '\t{ MENUITEMTYPE_DROPDOWN, 0, MENUITEMFLAG_LITERAL_TEXT, (uintptr_t)"SMAA View", 0, menuhandlerSmaaView },\n'
     '\t{ MENUITEMTYPE_LABEL, 0, MENUITEMFLAG_LITERAL_TEXT, (uintptr_t)gfx_smaa_status, 0, NULL },\n'
 )
 new_rows = (
-    '\t// Keep runtime diagnostics above the focusable selector so menu scrolling cannot\n'
-    '\t// strand the mutable label in the bottom separator/Back scissor region.\n'
-    '\t{ MENUITEMTYPE_LABEL, 0, MENUITEMFLAG_LITERAL_TEXT, (uintptr_t)gfx_smaa_status, 0, NULL },\n'
     '\t{ MENUITEMTYPE_DROPDOWN, 0, MENUITEMFLAG_LITERAL_TEXT, (uintptr_t)"SMAA View", 0, menuhandlerSmaaView },\n'
+    '\t// Focusable on purpose: selecting this row scrolls the entire diagnostic into view.\n'
+    '\t{ MENUITEMTYPE_DROPDOWN, 0, MENUITEMFLAG_LITERAL_TEXT, (uintptr_t)"SMAA Stats", 0, menuhandlerSmaaStatus },\n'
 )
 options = replace_once(options, old_rows, new_rows, "SMAA View/status row pair")
 
-# The original diagnostic selector exposed raw render-target channels directly.
-# That is useful to the CI harness but poor on-device diagnostics: RG edges look
-# red/green, blend weights look like false colour, and "Resolved" was identical
-# to Normal.  Keep the legacy raw modes internally for regression tests and map
-# the on-device selector to clean visualization modes instead.
 old_handler = '''static MenuItemHandlerResult menuhandlerSmaaView(s32 operation, struct menuitem *item, union handlerdata *data)
 {
     static const char *opts[] = { "Normal", "Edges", "Weights", "Resolved", "Difference x8" };
@@ -48,7 +42,26 @@ old_handler = '''static MenuItemHandlerResult menuhandlerSmaaView(s32 operation,
     return 0;
 }
 '''
-new_handler = '''static MenuItemHandlerResult menuhandlerSmaaView(s32 operation, struct menuitem *item, union handlerdata *data)
+new_handler = '''static MenuItemHandlerResult menuhandlerSmaaStatus(s32 operation, struct menuitem *item, union handlerdata *data)
+{
+    switch (operation) {
+    case MENUOP_GETOPTIONCOUNT:
+        data->dropdown.value = 1;
+        break;
+    case MENUOP_GETOPTIONTEXT:
+        return (intptr_t)gfx_smaa_status;
+    case MENUOP_GETSELECTEDINDEX:
+        data->dropdown.value = 0;
+        break;
+    case MENUOP_SET:
+        // Read-only diagnostic row.  It is a dropdown solely so it is focusable
+        // and participates in the menu's scrolling/layout calculations.
+        break;
+    }
+    return 0;
+}
+
+static MenuItemHandlerResult menuhandlerSmaaView(s32 operation, struct menuitem *item, union handlerdata *data)
 {
     static const char *opts[] = { "Normal", "Edges", "Weights", "Source", "Difference x8" };
     static const s32 modes[] = { 0, 5, 6, 7, 8 };
@@ -76,11 +89,11 @@ new_handler = '''static MenuItemHandlerResult menuhandlerSmaaView(s32 operation,
     return 0;
 }
 '''
-options = replace_once(options, old_handler, new_handler, "SMAA View handler")
+options = replace_once(options, old_handler, new_handler, "SMAA handlers")
 OPTIONS.write_text(options)
 
 # Add clean, human-readable debug views without changing the production SMAA
-# path.  Modes 1-4 stay exactly as they were for the GLES regression harness.
+# path. Modes 1-4 stay exactly as they were for the GLES regression harness.
 # The menu uses modes 5-8:
 #   5 edges as grayscale magnitude
 #   6 blend weights as grayscale magnitude
@@ -121,6 +134,12 @@ new_debug = '''    if (uDebugView == 1) {
     }
 '''
 gfx = replace_once(gfx, old_debug, new_debug, "resolve diagnostic shader block")
+
+# Keep every possible value short enough for the menu's right-hand value
+# column.  The detailed renderer log still keeps the long-form diagnostic.
+gfx = replace_once(gfx, '"Post FX initialization failed (see log)"', '"INIT FAIL (log)"', "compact init failure")
+gfx = replace_once(gfx, 'gfx_post_aa >= 3 ? "SMAA starting..." : "SMAA not selected"', 'gfx_post_aa >= 3 ? "Starting..." : "Not active"', "compact selection status")
+gfx = replace_once(gfx, '"SMAA failed: %s (Lite fallback)"', '"FAIL:%s -> Lite"', "compact fallback status")
 GFX.write_text(gfx)
 
-print("SMAA diagnostics: status restored above selector; clean Edges/Weights/Source/Difference views installed")
+print("SMAA diagnostics: focusable Stats row installed; clean debug views and compact live status enabled")
