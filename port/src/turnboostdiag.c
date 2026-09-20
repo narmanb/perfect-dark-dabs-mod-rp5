@@ -6,9 +6,10 @@
 #include "input.h"
 #include "system.h"
 #include "constants.h"
+#include "bss.h"
 #include "data.h"
 #include "types.h"
-#include "game/text.h"
+#include "game/game_1531a0.h"
 #include "lib/vi.h"
 
 s32 g_TurnBoostReadout = 1; // Investigation build: visible on first launch.
