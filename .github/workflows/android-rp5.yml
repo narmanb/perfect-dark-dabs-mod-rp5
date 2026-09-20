@@ -23,7 +23,6 @@ jobs:
         uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: '17'
 
       - name: Install Android native toolchain
         run: |
@@ -63,8 +62,6 @@ jobs:
           python3 - <<'PY'
           from pathlib import Path
           p = Path("port/fast3d/smaa_ref/SMAA.hlsl")
-          # Upstream SMAA.hlsl contains a few Windows-1252 punctuation bytes in comments.
-          # Normalize those comments to UTF-8 before embedding the shader text in C++.
           src = p.read_bytes().decode("cp1252")
           delimiter = "SMAAREF"
           if f"){delimiter}\"" in src:
@@ -106,6 +103,9 @@ jobs:
 
       - name: Add configurable sustained turn boost
         run: python3 android/add-turn-boost.py
+
+      - name: Fix generated turn boost menu indentation
+        run: python3 android/fix-turn-boost-menu-tabs.py
 
       - name: Validate generated SMAA on OpenGL ES
         shell: bash
