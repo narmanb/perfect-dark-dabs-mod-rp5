@@ -15,6 +15,21 @@ static void gfx_opengl_smaa_audit(int width, int height) {
     glPixelStorei(GL_PACK_SKIP_ROWS, 0);
     glPixelStorei(GL_PACK_SKIP_PIXELS, 0);
 
+    // These are the properties of the *actual Android/EGL default framebuffer*.
+    // videoGetMSAA()/gfx_msaa_level only reports the engine's requested offscreen
+    // MSAA level and cannot tell us whether the EGL surface itself is multisampled.
+    GLint draw_fbo = -1;
+    GLint sample_buffers = -1;
+    GLint samples = -1;
+    GLint color_encoding = GL_LINEAR;
+    glGetIntegerv(GL_DRAW_FRAMEBUFFER_BINDING, &draw_fbo);
+    glGetIntegerv(GL_SAMPLE_BUFFERS, &sample_buffers);
+    glGetIntegerv(GL_SAMPLES, &samples);
+    if (draw_fbo == 0) {
+        glGetFramebufferAttachmentParameteriv(GL_DRAW_FRAMEBUFFER, GL_BACK,
+            GL_FRAMEBUFFER_ATTACHMENT_COLOR_ENCODING, &color_encoding);
+    }
+
     GLenum prior = glGetError();
     if (prior != GL_NO_ERROR) sysLogPrintf(LOG_WARNING, "SMAA: render GL error 0x%x", prior);
     glBindFramebuffer(GL_READ_FRAMEBUFFER, smaa_fbo[0]);
@@ -65,18 +80,24 @@ static void gfx_opengl_smaa_audit(int width, int height) {
     glPixelStorei(GL_PACK_SKIP_ROWS, pack_rows);
     glPixelStorei(GL_PACK_SKIP_PIXELS, pack_pixels);
 
+    const char encoding_char = color_encoding == GL_SRGB ? 'S' :
+        color_encoding == GL_LINEAR ? 'L' : '?';
+
     if (error != GL_NO_ERROR || prior != GL_NO_ERROR) {
         snprintf(gfx_smaa_status, 96, "GL ERR 0x%x", error ? error : prior);
     } else {
-        // Keep a parseable full diagnostic in the shared status buffer. The menu
-        // formats this into two shorter focusable rows so nothing is clipped.
+        // Include the actual default framebuffer sample state. The menu splits
+        // this parseable string across two focusable rows so it remains readable.
         snprintf(gfx_smaa_status, 96,
-            "E:%u W:%u WM:%u WA:%.1f D:%u DM:%u DA:%.1f",
-            edges, weights, weight_max, avg_weight, changed, max_delta, avg_delta);
+            "SB:%d S:%d C:%c E:%u W:%u WM:%u WA:%.1f D:%u DM:%u DA:%.1f",
+            sample_buffers, samples, encoding_char, edges, weights, weight_max,
+            avg_weight, changed, max_delta, avg_delta);
     }
 
     sysLogPrintf(LOG_NOTE,
-        "SMAA audit: mode=%d frame=%u size=%dx%d edges=%u weights=%u weightMax=%u avgWeight=%.2f changed=%u maxDelta=%u avgDelta=%.2f error=0x%x",
-        gfx_post_aa, frame_count, width, height, edges, weights, weight_max, avg_weight,
-        changed, max_delta, avg_delta, error ? error : prior);
+        "SMAA audit: mode=%d frame=%u size=%dx%d drawFbo=%d sampleBuffers=%d samples=%d colorEncoding=%s edges=%u weights=%u weightMax=%u avgWeight=%.2f changed=%u maxDelta=%u avgDelta=%.2f error=0x%x",
+        gfx_post_aa, frame_count, width, height, draw_fbo, sample_buffers, samples,
+        encoding_char == 'S' ? "sRGB" : encoding_char == 'L' ? "linear" : "unknown",
+        edges, weights, weight_max, avg_weight, changed, max_delta, avg_delta,
+        error ? error : prior);
 }
