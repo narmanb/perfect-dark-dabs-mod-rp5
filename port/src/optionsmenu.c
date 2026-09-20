@@ -422,6 +422,8 @@ struct menudialogdef g_ExtendedMouseMenuDialog = {
 
 static MenuItemHandlerResult menuhandlerStickSpeed(s32 operation, struct menuitem *item, union handlerdata *data);
 static MenuItemHandlerResult menuhandlerStickDeadzone(s32 operation, struct menuitem *item, union handlerdata *data);
+static MenuItemHandlerResult menuhandlerRightStickCurve(s32 operation, struct menuitem *item, union handlerdata *data);
+static MenuItemHandlerResult menuhandlerRightStickOuterThreshold(s32 operation, struct menuitem *item, union handlerdata *data);
 
 struct menuitem g_ExtendedStickMenuItems[] = {
 	{
@@ -497,6 +499,14 @@ struct menuitem g_ExtendedStickMenuItems[] = {
 		menuhandlerStickDeadzone,
 	},
 	{
+		MENUITEMTYPE_DROPDOWN, 0, MENUITEMFLAG_LITERAL_TEXT,
+		(uintptr_t)"RStick Response", 0, menuhandlerRightStickCurve,
+	},
+	{
+		MENUITEMTYPE_SLIDER, 0, MENUITEMFLAG_LITERAL_TEXT | MENUITEMFLAG_SLIDER_WIDE,
+		(uintptr_t)"RStick Outer Threshold", 50, menuhandlerRightStickOuterThreshold,
+	},
+	{
 		MENUITEMTYPE_SEPARATOR,
 		0,
 		0,
@@ -548,6 +558,28 @@ static MenuItemHandlerResult menuhandlerStickDeadzone(s32 operation, struct menu
 		break;
 	}
 
+	return 0;
+}
+
+static MenuItemHandlerResult menuhandlerRightStickCurve(s32 operation, struct menuitem *item, union handlerdata *data)
+{
+	static const char *opts[] = { "Linear (Classic)", "Precision", "Fine" };
+	switch (operation) {
+	case MENUOP_GETOPTIONCOUNT: data->dropdown.value = ARRAYCOUNT(opts); break;
+	case MENUOP_GETOPTIONTEXT: return (uintptr_t)opts[data->dropdown.value];
+	case MENUOP_GETSELECTEDINDEX: data->dropdown.value = inputControllerGetRightStickCurve(g_ExtMenuPlayer); break;
+	case MENUOP_SET: inputControllerSetRightStickCurve(g_ExtMenuPlayer, data->dropdown.value); break;
+	}
+	return 0;
+}
+
+static MenuItemHandlerResult menuhandlerRightStickOuterThreshold(s32 operation, struct menuitem *item, union handlerdata *data)
+{
+	switch (operation) {
+	case MENUOP_GETSLIDER: data->slider.value = (inputControllerGetRightStickOuterThreshold(g_ExtMenuPlayer) - 0.50f) * 100.f + 0.5f; break;
+	case MENUOP_SET: inputControllerSetRightStickOuterThreshold(g_ExtMenuPlayer, 0.50f + (f32)data->slider.value / 100.f); break;
+	case MENUOP_GETSLIDERLABEL: sprintf(data->slider.label, "%d%%", 50 + data->slider.value); break;
+	}
 	return 0;
 }
 
