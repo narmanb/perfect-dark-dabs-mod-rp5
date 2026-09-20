@@ -47,6 +47,8 @@ static SDL_GameController *pads[INPUT_MAX_CONTROLLERS];
 	.swapSticks = 1, \
 	.deviceIndex = -1, \
 	.cancelCButtons = 0, \
+	.rstickCurve = 0, \
+	.rstickOuterThreshold = 1.f, \
 }
 
 static struct controllercfg {
@@ -59,6 +61,8 @@ static struct controllercfg {
 	s32 swapSticks;
 	s32 deviceIndex;
 	s32 cancelCButtons;
+	s32 rstickCurve;
+	f32 rstickOuterThreshold;
 } padsCfg[INPUT_MAX_CONTROLLERS] = {
 	CONTROLLERCFG_DEFAULT,
 	CONTROLLERCFG_DEFAULT,
@@ -997,6 +1001,20 @@ static inline s32 inputAxisScale(s32 x, const s32 deadzone, const f32 scale)
 	}
 }
 
+static inline s32 inputRightStickShape(s32 x, const s32 curve, const f32 outerThreshold)
+{
+	const f32 sign = x < 0 ? -1.f : 1.f;
+	f32 value = fabsf((f32)x / 32767.f);
+	const f32 threshold = outerThreshold < 0.50f ? 0.50f : (outerThreshold > 1.f ? 1.f : outerThreshold);
+
+	if (curve == 1) value = value * value;
+	else if (curve == 2) value = value * value * value;
+
+	value /= threshold;
+	if (value > 1.f) value = 1.f;
+	return (s32)(sign * value * 32767.f);
+}
+
 static s32 bindCaptureActive = 0;
 
 void inputSetBindCapture(s32 active)
@@ -1075,6 +1093,8 @@ s32 inputReadController(s32 idx, OSContPad *npad)
 	leftY = inputAxisScale(leftY, cfg->deadzone[cfg->axisMap[0][1]], cfg->sens[cfg->axisMap[0][1]]);
 	rightX = inputAxisScale(rightX, cfg->deadzone[cfg->axisMap[1][0]], cfg->sens[cfg->axisMap[1][0]]);
 	rightY = inputAxisScale(rightY, cfg->deadzone[cfg->axisMap[1][1]], cfg->sens[cfg->axisMap[1][1]]);
+	rightX = inputRightStickShape(rightX, cfg->rstickCurve, cfg->rstickOuterThreshold);
+	rightY = inputRightStickShape(rightY, cfg->rstickCurve, cfg->rstickOuterThreshold);
 
 	if (!npad->stick_x && leftX) {
 		npad->stick_x = leftX / 0x100;
@@ -1272,6 +1292,11 @@ void inputControllerSetAxisDeadzone(s32 cidx, s32 stick, s32 axis, f32 value)
 {
 	padsCfg[cidx].deadzone[stick * 2 + axis] = value * 32767.f;
 }
+
+s32 inputControllerGetRightStickCurve(s32 cidx) { return padsCfg[cidx].rstickCurve; }
+void inputControllerSetRightStickCurve(s32 cidx, s32 curve) { padsCfg[cidx].rstickCurve = curve < 0 ? 0 : (curve > 2 ? 2 : curve); }
+f32 inputControllerGetRightStickOuterThreshold(s32 cidx) { return padsCfg[cidx].rstickOuterThreshold; }
+void inputControllerSetRightStickOuterThreshold(s32 cidx, f32 value) { padsCfg[cidx].rstickOuterThreshold = value < 0.50f ? 0.50f : (value > 1.f ? 1.f : value); }
 
 s32 inputGetConnectedControllers(s32 *out)
 {
@@ -1769,6 +1794,8 @@ PD_CONSTRUCTOR static void inputConfigInit(void)
 		configRegisterFloat(strFmt("%s.LStickScaleY", secname), &padsCfg[c].sens[1], -10.f, 10.f);
 		configRegisterFloat(strFmt("%s.RStickScaleX", secname), &padsCfg[c].sens[2], -10.f, 10.f);
 		configRegisterFloat(strFmt("%s.RStickScaleY", secname), &padsCfg[c].sens[3], -10.f, 10.f);
+		configRegisterInt(strFmt("%s.RStickCurve", secname), &padsCfg[c].rstickCurve, 0, 2);
+		configRegisterFloat(strFmt("%s.RStickOuterThreshold", secname), &padsCfg[c].rstickOuterThreshold, 0.50f, 1.f);
 		configRegisterInt(strFmt("%s.StickCButtons", secname), &padsCfg[c].stickCButtons, 0, 1);
 		configRegisterInt(strFmt("%s.CancelCButtons", secname), &padsCfg[c].cancelCButtons, 0, 1);
 		configRegisterInt(strFmt("%s.SwapSticks", secname), &padsCfg[c].swapSticks, 0, 1);
