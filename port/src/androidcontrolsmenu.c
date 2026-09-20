@@ -19,8 +19,8 @@ extern struct menudialogdef g_ExtendedStickMenuDialog;
 static s32 g_AndroidGameplayTouchEnabled = 1;
 static f32 g_AndroidGameplayTouchOpacity = 0.46f;
 static s32 g_AndroidTouchLookMode = 0;
-static f32 g_AndroidTrackpadSensitivityX = 1.0f;
-static f32 g_AndroidTrackpadSensitivityY = 1.0f;
+static f32 g_AndroidTouchLookSensitivityX = 1.0f;
+static f32 g_AndroidTouchLookSensitivityY = 1.0f;
 
 static s32 androidControlsCurrentPlayer(void)
 {
@@ -31,24 +31,6 @@ static s32 androidControlsCurrentPlayer(void)
 	}
 
 	return 0;
-}
-
-/* In the PC control style the first logical stick is look/aim and the second
- * logical stick is movement. Swap Sticks maps that first logical stick to the
- * physical right stick, which is the default modern-controller layout. */
-static s32 androidControlsLookStick(s32 player)
-{
-	return inputControllerGetSticksSwapped(player) ? 1 : 0;
-}
-
-static f32 androidControlsGetPlayerLookScale(s32 player, s32 axis)
-{
-	return inputControllerGetAxisScale(player, androidControlsLookStick(player), axis);
-}
-
-static void androidControlsSetPlayerLookScale(s32 player, s32 axis, f32 value)
-{
-	inputControllerSetAxisScale(player, androidControlsLookStick(player), axis, value);
 }
 
 static MenuItemHandlerResult menuhandlerAndroidGameplayTouchEnabled(s32 operation, struct menuitem *item, union handlerdata *data)
@@ -106,44 +88,19 @@ static MenuItemHandlerResult menuhandlerAndroidTouchLookMode(s32 operation, stru
 
 static struct menuitem g_AndroidControllerSettingsMenuItems[];
 
-static MenuItemHandlerResult menuhandlerAndroidLookSensitivity(s32 operation, struct menuitem *item, union handlerdata *data)
+/* One touch-only sensitivity pair drives whichever touchscreen look mode is
+ * selected. It deliberately does not touch controller axis scale; the physical
+ * RP5 right stick is tuned only in Advanced Stick Calibration. */
+static MenuItemHandlerResult menuhandlerAndroidTouchLookSensitivity(s32 operation, struct menuitem *item, union handlerdata *data)
 {
-	const s32 player = androidControlsCurrentPlayer();
 	const s32 axis = item - (g_AndroidControllerSettingsMenuItems + 3);
-	f32 value;
-
-	if (axis < 0 || axis > 1) {
-		return 0;
-	}
-
-	switch (operation) {
-	case MENUOP_GETSLIDER:
-		value = androidControlsGetPlayerLookScale(player, axis);
-		if (value < 0.0f) value = 0.0f;
-		if (value > 4.0f) value = 4.0f;
-		data->slider.value = value * 10.0f + 0.5f;
-		break;
-	case MENUOP_SET:
-		androidControlsSetPlayerLookScale(player, axis, (f32)data->slider.value / 10.0f);
-		break;
-	case MENUOP_GETSLIDERLABEL:
-		sprintf(data->slider.label, "%.1fx", (f32)data->slider.value / 10.0f);
-		break;
-	}
-
-	return 0;
-}
-
-static MenuItemHandlerResult menuhandlerAndroidTrackpadSensitivity(s32 operation, struct menuitem *item, union handlerdata *data)
-{
-	const s32 axis = item - (g_AndroidControllerSettingsMenuItems + 5);
 	f32 *value;
 
 	if (axis < 0 || axis > 1) {
 		return 0;
 	}
 
-	value = axis ? &g_AndroidTrackpadSensitivityY : &g_AndroidTrackpadSensitivityX;
+	value = axis ? &g_AndroidTouchLookSensitivityY : &g_AndroidTouchLookSensitivityX;
 
 	switch (operation) {
 	case MENUOP_CHECKHIDDEN:
@@ -177,33 +134,17 @@ static struct menuitem g_AndroidControllerSettingsMenuItems[] = {
 		MENUITEMTYPE_SLIDER,
 		0,
 		MENUITEMFLAG_LITERAL_TEXT | MENUITEMFLAG_SLIDER_WIDE,
-		(uintptr_t)"Look Sensitivity X",
+		(uintptr_t)"Touch Look Sensitivity X",
 		40,
-		menuhandlerAndroidLookSensitivity,
+		menuhandlerAndroidTouchLookSensitivity,
 	},
 	{
 		MENUITEMTYPE_SLIDER,
 		0,
 		MENUITEMFLAG_LITERAL_TEXT | MENUITEMFLAG_SLIDER_WIDE,
-		(uintptr_t)"Look Sensitivity Y",
+		(uintptr_t)"Touch Look Sensitivity Y",
 		40,
-		menuhandlerAndroidLookSensitivity,
-	},
-	{
-		MENUITEMTYPE_SLIDER,
-		0,
-		MENUITEMFLAG_LITERAL_TEXT | MENUITEMFLAG_SLIDER_WIDE,
-		(uintptr_t)"Trackpad Sensitivity X",
-		40,
-		menuhandlerAndroidTrackpadSensitivity,
-	},
-	{
-		MENUITEMTYPE_SLIDER,
-		0,
-		MENUITEMFLAG_LITERAL_TEXT | MENUITEMFLAG_SLIDER_WIDE,
-		(uintptr_t)"Trackpad Sensitivity Y",
-		40,
-		menuhandlerAndroidTrackpadSensitivity,
+		menuhandlerAndroidTouchLookSensitivity,
 	},
 	{
 		MENUITEMTYPE_SEPARATOR,
@@ -259,22 +200,24 @@ s32 androidControlsGetTouchLookMode(void)
 
 f32 androidControlsGetTouchLookSensitivityX(void)
 {
-	return androidControlsGetPlayerLookScale(0, 0);
+	return g_AndroidTouchLookSensitivityX;
 }
 
 f32 androidControlsGetTouchLookSensitivityY(void)
 {
-	return androidControlsGetPlayerLookScale(0, 1);
+	return g_AndroidTouchLookSensitivityY;
 }
 
+/* Keep the existing JNI names used by TouchControls.java. Both analog-stick
+ * and trackpad paths intentionally receive the same touch-only sensitivity. */
 f32 androidControlsGetTrackpadSensitivityX(void)
 {
-	return g_AndroidTrackpadSensitivityX;
+	return g_AndroidTouchLookSensitivityX;
 }
 
 f32 androidControlsGetTrackpadSensitivityY(void)
 {
-	return g_AndroidTrackpadSensitivityY;
+	return g_AndroidTouchLookSensitivityY;
 }
 
 PD_CONSTRUCTOR static void androidControlsConfigInit(void)
@@ -282,12 +225,16 @@ PD_CONSTRUCTOR static void androidControlsConfigInit(void)
 	configRegisterInt("Input.AndroidGameplayTouchEnabled", &g_AndroidGameplayTouchEnabled, 0, 1);
 	configRegisterFloat("Input.AndroidGameplayTouchOpacity", &g_AndroidGameplayTouchOpacity, 0.0f, 1.0f);
 	configRegisterInt("Input.AndroidTouchLookMode", &g_AndroidTouchLookMode, 0, 1);
-	configRegisterFloat("Input.AndroidTrackpadSensitivityX", &g_AndroidTrackpadSensitivityX, 0.0f, 4.0f);
-	configRegisterFloat("Input.AndroidTrackpadSensitivityY", &g_AndroidTrackpadSensitivityY, 0.0f, 4.0f);
+
+	/* Retain the old Trackpad config keys so an update-in-place preserves the
+	 * user's previous touch sensitivity, but the values now apply to both touch
+	 * look modes and never to the physical controller. */
+	configRegisterFloat("Input.AndroidTrackpadSensitivityX", &g_AndroidTouchLookSensitivityX, 0.0f, 4.0f);
+	configRegisterFloat("Input.AndroidTrackpadSensitivityY", &g_AndroidTouchLookSensitivityY, 0.0f, 4.0f);
 
 	/* Replace the Android build's existing Stick Settings door with a page that
-	 * exposes the useful look controls first, while keeping every original axis
-	 * scale/deadzone option one level deeper under Advanced Stick Calibration. */
+	 * exposes touch-only controls first, while keeping physical stick calibration
+	 * and right-stick response tuning one level deeper. */
 	g_ExtendedControllerMenuItems[3].param2 = (uintptr_t)"Look & Stick Settings...\n";
 	g_ExtendedControllerMenuItems[3].handler =
 		(uintptr_t (*)(s32, struct menuitem *, union handlerdata *))&g_AndroidControllerSettingsMenuDialog;
