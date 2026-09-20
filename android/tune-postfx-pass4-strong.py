@@ -15,6 +15,15 @@ def replace_once(old, new, label):
     print(f"postfx pass4 strong: {label}")
 
 
+def replace_exact_count(old, new, expected, label):
+    global text
+    count = text.count(old)
+    if count != expected:
+        raise SystemExit(f"postfx pass4 strong: expected {expected} {label}, found {count}")
+    text = text.replace(old, new)
+    print(f"postfx pass4 strong: {label} ({count} replacements)")
+
+
 # Run 62's multi-pass path was still too conservative on the RP5. Make edge
 # detection much more sensitive, especially in Ultra, while continuing to gate
 # the blend to detected edges rather than blurring the whole frame.
@@ -28,9 +37,12 @@ replace_once(
     "local * 0.08",
     "multi-pass adaptive threshold",
 )
-replace_once(
+# This ramp appears twice in the generated post-FX source after the earlier
+# passes are applied. Both copies belong to AA edge detection, so tune both.
+replace_exact_count(
     "adapt * 3.2",
     "adapt * 1.8",
+    2,
     "multi-pass edge ramp",
 )
 replace_once(
