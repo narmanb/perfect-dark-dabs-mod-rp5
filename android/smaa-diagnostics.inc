@@ -22,15 +22,27 @@ static void gfx_opengl_smaa_audit(int width, int height) {
     glBindFramebuffer(GL_READ_FRAMEBUFFER, 0);
     glReadBuffer(GL_BACK);
     glReadPixels(0, 0, width, height, GL_RGBA, GL_UNSIGNED_BYTE, resolved.data());
-    unsigned edges = 0, weights = 0, changed = 0, max_delta = 0;
-    uint64_t total_delta = 0;
+
+    unsigned edges = 0, weights = 0, weight_max = 0, changed = 0, max_delta = 0;
+    uint64_t weight_total = 0, total_delta = 0;
+
     glBindFramebuffer(GL_READ_FRAMEBUFFER, smaa_fbo[1]);
     glReadPixels(0, 0, width, height, GL_RGBA, GL_UNSIGNED_BYTE, data.data());
     for (size_t p = 0; p < pixels; ++p) edges += data[p * 4] || data[p * 4 + 1];
+
     glBindFramebuffer(GL_READ_FRAMEBUFFER, smaa_fbo[2]);
     glReadPixels(0, 0, width, height, GL_RGBA, GL_UNSIGNED_BYTE, data.data());
     for (size_t p = 0; p < pixels; ++p) {
-        weights += data[p * 4] || data[p * 4 + 1] || data[p * 4 + 2] || data[p * 4 + 3];
+        unsigned weight = data[p * 4];
+        if (data[p * 4 + 1] > weight) weight = data[p * 4 + 1];
+        if (data[p * 4 + 2] > weight) weight = data[p * 4 + 2];
+        if (data[p * 4 + 3] > weight) weight = data[p * 4 + 3];
+        if (weight != 0) {
+            ++weights;
+            weight_total += weight;
+            if (weight > weight_max) weight_max = weight;
+        }
+
         unsigned delta = 0;
         for (int c = 0; c < 3; ++c) {
             const unsigned d = (unsigned)abs((int)source[p * 4 + c] - (int)resolved[p * 4 + c]);
@@ -42,6 +54,8 @@ static void gfx_opengl_smaa_audit(int width, int height) {
         }
         if (delta > max_delta) max_delta = delta;
     }
+
+    const double avg_weight = weights ? (double)weight_total / (double)weights : 0.0;
     const double avg_delta = changed ? (double)total_delta / (double)changed : 0.0;
     GLenum error = glGetError();
     glBindFramebuffer(GL_READ_FRAMEBUFFER, 0);
@@ -50,15 +64,19 @@ static void gfx_opengl_smaa_audit(int width, int height) {
     glPixelStorei(GL_PACK_ROW_LENGTH, pack_row);
     glPixelStorei(GL_PACK_SKIP_ROWS, pack_rows);
     glPixelStorei(GL_PACK_SKIP_PIXELS, pack_pixels);
+
     if (error != GL_NO_ERROR || prior != GL_NO_ERROR) {
         snprintf(gfx_smaa_status, 96, "GL ERR 0x%x", error ? error : prior);
     } else {
-        // Fit the useful magnitude diagnostics in one menu value column.
-        // E keeps the existing CI/status sentinel; W remains in the detailed log.
-        // D = changed pixels, M = maximum per-pixel RGB delta, A = average delta
-        // among changed pixels, all deltas measured on the 0..255 channel scale.
-        snprintf(gfx_smaa_status, 96, "E:%u D%u M%u A%.1f", edges, changed, max_delta, avg_delta);
+        // Keep a parseable full diagnostic in the shared status buffer. The menu
+        // formats this into two shorter focusable rows so nothing is clipped.
+        snprintf(gfx_smaa_status, 96,
+            "E:%u W:%u WM:%u WA:%.1f D:%u DM:%u DA:%.1f",
+            edges, weights, weight_max, avg_weight, changed, max_delta, avg_delta);
     }
-    sysLogPrintf(LOG_NOTE, "SMAA audit: mode=%d frame=%u size=%dx%d edges=%u weights=%u changed=%u maxDelta=%u avgDelta=%.2f error=0x%x",
-        gfx_post_aa, frame_count, width, height, edges, weights, changed, max_delta, avg_delta, error ? error : prior);
+
+    sysLogPrintf(LOG_NOTE,
+        "SMAA audit: mode=%d frame=%u size=%dx%d edges=%u weights=%u weightMax=%u avgWeight=%.2f changed=%u maxDelta=%u avgDelta=%.2f error=0x%x",
+        gfx_post_aa, frame_count, width, height, edges, weights, weight_max, avg_weight,
+        changed, max_delta, avg_delta, error ? error : prior);
 }
