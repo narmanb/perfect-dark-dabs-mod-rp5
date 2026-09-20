@@ -113,8 +113,8 @@ static MenuItemHandlerResult menuhandlerSmaaDetail(s32 operation, struct menuite
 
 static MenuItemHandlerResult menuhandlerSmaaView(s32 operation, struct menuitem *item, union handlerdata *data)
 {
-    static const char *opts[] = { "Normal", "Edges", "Weights", "Source", "Difference x8" };
-    static const s32 modes[] = { 0, 5, 6, 7, 8 };
+    static const char *opts[] = { "Normal", "Edges", "Weights", "Source", "Difference x8", "Boost x2", "Boost x4" };
+    static const s32 modes[] = { 0, 5, 6, 7, 8, 9, 10 };
     switch (operation) {
     case MENUOP_GETOPTIONCOUNT:
         data->dropdown.value = ARRAYCOUNT(opts);
@@ -144,11 +144,13 @@ OPTIONS.write_text(options)
 
 # Add clean, human-readable debug views without changing the production SMAA
 # path. Modes 1-4 stay exactly as they were for the GLES regression harness.
-# The menu uses modes 5-8:
+# The menu uses modes 5-10:
 #   5 edges as grayscale magnitude
 #   6 blend weights as grayscale magnitude
 #   7 pre-SMAA source image
 #   8 resolved-vs-source difference as grayscale magnitude
+#   9 same SMAA correction exaggerated 2x over the source
+#  10 same SMAA correction exaggerated 4x over the source
 # Normal remains mode 0 (the actual resolved frame).
 gfx = GFX.read_text()
 old_debug = '''    if (uDebugView == 1) {
@@ -181,6 +183,14 @@ new_debug = '''    if (uDebugView == 1) {
         vec3 d = abs(resolved.rgb - texture(uColorTex, vUV).rgb);
         float m = max(max(d.r, d.g), d.b);
         oCol = vec4(vec3(clamp(m * 8.0, 0.0, 1.0)), 1.0);
+    } else if (uDebugView == 9) {
+        vec4 source = texture(uColorTex, vUV);
+        vec3 correction = resolved.rgb - source.rgb;
+        oCol = vec4(clamp(source.rgb + correction * 2.0, 0.0, 1.0), resolved.a);
+    } else if (uDebugView == 10) {
+        vec4 source = texture(uColorTex, vUV);
+        vec3 correction = resolved.rgb - source.rgb;
+        oCol = vec4(clamp(source.rgb + correction * 4.0, 0.0, 1.0), resolved.a);
     }
 '''
 gfx = replace_once(gfx, old_debug, new_debug, "resolve diagnostic shader block")
@@ -192,4 +202,4 @@ gfx = replace_once(gfx, 'gfx_post_aa >= 3 ? "SMAA starting..." : "SMAA not selec
 gfx = replace_once(gfx, '"SMAA failed: %s (Lite fallback)"', '"FAIL:%s -> Lite"', "compact fallback status")
 GFX.write_text(gfx)
 
-print("SMAA diagnostics: gameplay-latched counters, engine + actual framebuffer MSAA, color encoding and blend-weight magnitude enabled")
+print("SMAA diagnostics: gameplay-latched counters, framebuffer sampling, blend-weight magnitude and correction boost views enabled")
