@@ -104,6 +104,9 @@ jobs:
       - name: Retune right-stick acceleration and smoothing
         run: python3 android/retune-right-stick-aiming.py
 
+      - name: Add configurable sustained turn boost
+        run: python3 android/add-turn-boost.py
+
       - name: Validate generated SMAA on OpenGL ES
         shell: bash
         run: |
