@@ -149,12 +149,12 @@ if test.count(anchor) != 1:
     raise SystemExit("linear-light SMAA: verifier measure anchor changed")
 test = test.replace(anchor, '\ncoverage_results=[]\n' + anchor, 1)
 old_assert = '''        item.update(aliased_mse=old,smaa_mse=new)\n        assert new<old, item\n'''
-new_assert = '''        item.update(aliased_mse=old,smaa_mse=new)\n        coverage_results.append((old,new,source.shape[0]*source.shape[1]))\n'''
+new_assert = '''        item.update(aliased_mse=old,smaa_mse=new)\n        coverage_results.append((old,new,int(source.shape[0]*source.shape[1])))\n'''
 if test.count(old_assert) != 1:
     raise SystemExit("linear-light SMAA: verifier per-case coverage assertion changed")
 test = test.replace(old_assert, new_assert, 1)
 old_end = '''assert 'E:' in H.status().decode()\nreport['status']='passed'\n'''
-new_end = '''assert 'E:' in H.status().decode()\n# Weight by pixel count so native-resolution cases dominate the aggregate.\nold_sse=sum(old*pixels for old,new,pixels in coverage_results)\nnew_sse=sum(new*pixels for old,new,pixels in coverage_results)\npixel_total=sum(pixels for old,new,pixels in coverage_results)\nimproved=sum(new<old for old,new,pixels in coverage_results)\ncoverage_summary={'cases':len(coverage_results),'improved':improved,\n    'aliased_mse':old_sse/pixel_total,'smaa_mse':new_sse/pixel_total}\nreport['coverage_aggregate']=coverage_summary\nprint('linear-light coverage aggregate:',json.dumps(coverage_summary),flush=True)\nassert new_sse < old_sse, coverage_summary\nassert improved >= len(coverage_results)-2, coverage_summary\nreport['status']='passed'\n'''
+new_end = '''assert 'E:' in H.status().decode()\n# Weight by pixel count so native-resolution cases dominate the aggregate.\nold_sse=sum(float(old)*pixels for old,new,pixels in coverage_results)\nnew_sse=sum(float(new)*pixels for old,new,pixels in coverage_results)\npixel_total=sum(int(pixels) for old,new,pixels in coverage_results)\nimproved=sum(1 for old,new,pixels in coverage_results if float(new)<float(old))\ncoverage_summary={'cases':int(len(coverage_results)),'improved':int(improved),\n    'aliased_mse':float(old_sse/pixel_total),'smaa_mse':float(new_sse/pixel_total)}\nreport['coverage_aggregate']=coverage_summary\nprint('linear-light coverage aggregate:',json.dumps(coverage_summary),flush=True)\nassert new_sse < old_sse, coverage_summary\nassert improved >= len(coverage_results)-2, coverage_summary\nreport['status']='passed'\n'''
 if test.count(old_end) != 1:
     raise SystemExit("linear-light SMAA: verifier aggregate anchor changed")
 test = test.replace(old_end, new_end, 1)
