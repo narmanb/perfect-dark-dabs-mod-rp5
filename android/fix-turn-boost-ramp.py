@@ -31,7 +31,7 @@ old_apply = '''\t\tconst f32 p = turnboostlevel[contpad1];
 '''
 new_apply = '''\t\tconst f32 p = turnboostlevel[contpad1];
 \t\tconst f32 eased = p * p * (3.f - 2.f * p);
-\t\tturnboostmult = 1.f + inputControllerGetTurnBoost(contpad1) * 1.00f * eased * aimfactor;
+\t\tturnboostmult = 1.f + inputControllerGetTurnBoost(contpad1) * 3.00f * eased * aimfactor;
 '''
 if s.count(old_apply) != 1:
     raise SystemExit(f"turn boost persistent multiplier: expected 1 match, found {s.count(old_apply)}")
@@ -74,4 +74,4 @@ if s.count(old_final) != 1:
 s = s.replace(old_final, new_final, 1)
 
 p.write_text(s, encoding="utf-8")
-print("turn boost now ramps from actual controller turn output and reaches 2x at 100%")
+print("turn boost now ramps from actual controller turn output and reaches 4x at 100%")

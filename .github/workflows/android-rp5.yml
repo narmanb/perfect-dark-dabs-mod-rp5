@@ -111,12 +111,6 @@ jobs:
       - name: Fix turn boost ramp feedback
         run: python3 android/fix-turn-boost-ramp.py
 
-      - name: Instrument actual turn boost and final camera yaw
-        run: python3 android/add-turn-boost-diagnostics.py
-
-      - name: Verify generated turn boost yaw calculations
-        run: python3 android/tests/verify-turn-boost.py
-
       - name: Validate generated SMAA on OpenGL ES
         shell: bash
         run: |
@@ -174,26 +168,6 @@ jobs:
           name: android-build-log
           path: android-build.log
           if-no-files-found: warn
-
-      - name: Upload generated turn path and yaw evidence
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: turn-boost-diagnostics-run${{ github.run_number }}
-          path: |
-            turn-validation/*.json
-            turn-validation/*.c
-            src/game/bondmove.c
-            src/game/bondwalk.c
-            src/game/player.c
-            src/game/lv.c
-            src/lib/mtx.c
-            port/src/input.c
-            port/include/input.h
-            port/src/optionsmenu.c
-            port/src/turnboostdiag.c
-            port/include/turnboostdiag.h
-          if-no-files-found: error
 
       - name: Upload APK
         if: success()
