@@ -46,9 +46,11 @@ static void gfx_opengl_smaa_audit(int width, int height) {
     glPixelStorei(GL_PACK_SKIP_ROWS, pack_rows);
     glPixelStorei(GL_PACK_SKIP_PIXELS, pack_pixels);
     if (error != GL_NO_ERROR || prior != GL_NO_ERROR) {
-        snprintf(gfx_smaa_status, 96, "SMAA GL error 0x%x (see log)", error ? error : prior);
+        snprintf(gfx_smaa_status, 96, "GL ERR 0x%x", error ? error : prior);
     } else {
-        snprintf(gfx_smaa_status, 96, "SMAA %s E:%u W:%u D:%u", gfx_post_aa == 4 ? "Ultra" : "High", edges, weights, changed);
+        // Keep the on-screen value short enough for the normal two-column menu row.
+        // Post AA already shows High/Ultra, so repeat only the useful counters here.
+        snprintf(gfx_smaa_status, 96, "E:%u W:%u D:%u", edges, weights, changed);
     }
     sysLogPrintf(LOG_NOTE, "SMAA audit: mode=%d frame=%u size=%dx%d edges=%u weights=%u changed=%u maxDelta=%u error=0x%x",
         gfx_post_aa, frame_count, width, height, edges, weights, changed, max_delta, error ? error : prior);
