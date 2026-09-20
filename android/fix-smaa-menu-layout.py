@@ -42,12 +42,14 @@ old_handler = '''static MenuItemHandlerResult menuhandlerSmaaView(s32 operation,
     return 0;
 }
 '''
-new_handler = '''static s32 smaaParseStatus(unsigned *edges, unsigned *weights, unsigned *weightmax,
+new_handler = '''static s32 smaaParseStatus(s32 *samplebuffers, s32 *samples, char *encoding,
+        unsigned *edges, unsigned *weights, unsigned *weightmax,
         double *weightavg, unsigned *changed, unsigned *deltamax, double *deltaavg)
 {
     return sscanf(gfx_smaa_status,
-        "E:%u W:%u WM:%u WA:%lf D:%u DM:%u DA:%lf",
-        edges, weights, weightmax, weightavg, changed, deltamax, deltaavg) == 7;
+        "SB:%d S:%d C:%c E:%u W:%u WM:%u WA:%lf D:%u DM:%u DA:%lf",
+        samplebuffers, samples, encoding, edges, weights, weightmax, weightavg,
+        changed, deltamax, deltaavg) == 10;
 }
 
 static MenuItemHandlerResult menuhandlerSmaaStatus(s32 operation, struct menuitem *item, union handlerdata *data)
@@ -58,10 +60,15 @@ static MenuItemHandlerResult menuhandlerSmaaStatus(s32 operation, struct menuite
         data->dropdown.value = 1;
         break;
     case MENUOP_GETOPTIONTEXT: {
+        s32 sb = 0, samples = 0;
+        char enc = '?';
         unsigned e = 0, w = 0, wm = 0, d = 0, dm = 0;
         double wa = 0.0, da = 0.0;
-        if (smaaParseStatus(&e, &w, &wm, &wa, &d, &dm, &da)) {
-            snprintf(text, sizeof(text), "MS%d E%u W%u", videoGetMSAA(), e, w);
+        if (smaaParseStatus(&sb, &samples, &enc, &e, &w, &wm, &wa, &d, &dm, &da)) {
+            // MS is the engine request. H is the actual Android/EGL default
+            // framebuffer sample-buffers/samples followed by L=linear or S=sRGB.
+            snprintf(text, sizeof(text), "MS%d H%d/%d%c E%u W%u",
+                videoGetMSAA(), sb, samples, enc, e, w);
         } else {
             snprintf(text, sizeof(text), "MS%d %s", videoGetMSAA(), gfx_smaa_status);
         }
@@ -84,9 +91,11 @@ static MenuItemHandlerResult menuhandlerSmaaDetail(s32 operation, struct menuite
         data->dropdown.value = 1;
         break;
     case MENUOP_GETOPTIONTEXT: {
+        s32 sb = 0, samples = 0;
+        char enc = '?';
         unsigned e = 0, w = 0, wm = 0, d = 0, dm = 0;
         double wa = 0.0, da = 0.0;
-        if (smaaParseStatus(&e, &w, &wm, &wa, &d, &dm, &da)) {
+        if (smaaParseStatus(&sb, &samples, &enc, &e, &w, &wm, &wa, &d, &dm, &da)) {
             snprintf(text, sizeof(text), "WM%u WA%.1f DM%u DA%.1f", wm, wa, dm, da);
         } else {
             snprintf(text, sizeof(text), "Waiting...");
@@ -183,4 +192,4 @@ gfx = replace_once(gfx, 'gfx_post_aa >= 3 ? "SMAA starting..." : "SMAA not selec
 gfx = replace_once(gfx, '"SMAA failed: %s (Lite fallback)"', '"FAIL:%s -> Lite"', "compact fallback status")
 GFX.write_text(gfx)
 
-print("SMAA diagnostics: gameplay-latched counters, MSAA level and blend-weight magnitude rows enabled")
+print("SMAA diagnostics: gameplay-latched counters, engine + actual framebuffer MSAA, color encoding and blend-weight magnitude enabled")
