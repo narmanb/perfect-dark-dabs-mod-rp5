@@ -49,6 +49,8 @@ static SDL_GameController *pads[INPUT_MAX_CONTROLLERS];
 	.cancelCButtons = 0, \
 	.rstickCurve = 0, \
 	.rstickOuterThreshold = 1.f, \
+	.rstickAcceleration = 0.f, \
+	.rstickSmoothing = 0.f, \
 }
 
 static struct controllercfg {
@@ -63,6 +65,8 @@ static struct controllercfg {
 	s32 cancelCButtons;
 	s32 rstickCurve;
 	f32 rstickOuterThreshold;
+	f32 rstickAcceleration;
+	f32 rstickSmoothing;
 } padsCfg[INPUT_MAX_CONTROLLERS] = {
 	CONTROLLERCFG_DEFAULT,
 	CONTROLLERCFG_DEFAULT,
@@ -1015,6 +1019,28 @@ static inline s32 inputRightStickShape(s32 x, const s32 curve, const f32 outerTh
 	return (s32)(sign * value * 32767.f);
 }
 
+static f32 rstickSmoothed[INPUT_MAX_CONTROLLERS][2];
+
+static inline s32 inputRightStickDynamic(s32 x, s32 cidx, s32 axis, const f32 acceleration, const f32 smoothing)
+{
+	f32 value = (f32)x;
+	if (acceleration > 0.f) {
+		const f32 magnitude = fabsf(value) / 32767.f;
+		value *= 1.f + acceleration * magnitude;
+		if (value > 32767.f) value = 32767.f;
+		else if (value < -32768.f) value = -32768.f;
+	}
+	if (smoothing > 0.f) {
+		// 0 is the exact legacy path. Higher values retain more of the prior
+		// sample, trading immediacy for steadier fine aiming.
+		rstickSmoothed[cidx][axis] += (value - rstickSmoothed[cidx][axis]) * (1.f - smoothing);
+		value = rstickSmoothed[cidx][axis];
+	} else {
+		rstickSmoothed[cidx][axis] = value;
+	}
+	return (s32)value;
+}
+
 static s32 bindCaptureActive = 0;
 
 void inputSetBindCapture(s32 active)
@@ -1095,6 +1121,8 @@ s32 inputReadController(s32 idx, OSContPad *npad)
 	rightY = inputAxisScale(rightY, cfg->deadzone[cfg->axisMap[1][1]], cfg->sens[cfg->axisMap[1][1]]);
 	rightX = inputRightStickShape(rightX, cfg->rstickCurve, cfg->rstickOuterThreshold);
 	rightY = inputRightStickShape(rightY, cfg->rstickCurve, cfg->rstickOuterThreshold);
+	rightX = inputRightStickDynamic(rightX, idx, 0, cfg->rstickAcceleration, cfg->rstickSmoothing);
+	rightY = inputRightStickDynamic(rightY, idx, 1, cfg->rstickAcceleration, cfg->rstickSmoothing);
 
 	if (!npad->stick_x && leftX) {
 		npad->stick_x = leftX / 0x100;
@@ -1297,6 +1325,10 @@ s32 inputControllerGetRightStickCurve(s32 cidx) { return padsCfg[cidx].rstickCur
 void inputControllerSetRightStickCurve(s32 cidx, s32 curve) { padsCfg[cidx].rstickCurve = curve < 0 ? 0 : (curve > 2 ? 2 : curve); }
 f32 inputControllerGetRightStickOuterThreshold(s32 cidx) { return padsCfg[cidx].rstickOuterThreshold; }
 void inputControllerSetRightStickOuterThreshold(s32 cidx, f32 value) { padsCfg[cidx].rstickOuterThreshold = value < 0.50f ? 0.50f : (value > 1.f ? 1.f : value); }
+f32 inputControllerGetRightStickAcceleration(s32 cidx) { return padsCfg[cidx].rstickAcceleration; }
+void inputControllerSetRightStickAcceleration(s32 cidx, f32 value) { padsCfg[cidx].rstickAcceleration = value < 0.f ? 0.f : (value > 1.f ? 1.f : value); }
+f32 inputControllerGetRightStickSmoothing(s32 cidx) { return padsCfg[cidx].rstickSmoothing; }
+void inputControllerSetRightStickSmoothing(s32 cidx, f32 value) { padsCfg[cidx].rstickSmoothing = value < 0.f ? 0.f : (value > 0.75f ? 0.75f : value); }
 
 s32 inputGetConnectedControllers(s32 *out)
 {
@@ -1796,6 +1828,8 @@ PD_CONSTRUCTOR static void inputConfigInit(void)
 		configRegisterFloat(strFmt("%s.RStickScaleY", secname), &padsCfg[c].sens[3], -10.f, 10.f);
 		configRegisterInt(strFmt("%s.RStickCurve", secname), &padsCfg[c].rstickCurve, 0, 2);
 		configRegisterFloat(strFmt("%s.RStickOuterThreshold", secname), &padsCfg[c].rstickOuterThreshold, 0.50f, 1.f);
+		configRegisterFloat(strFmt("%s.RStickAcceleration", secname), &padsCfg[c].rstickAcceleration, 0.f, 1.f);
+		configRegisterFloat(strFmt("%s.RStickSmoothing", secname), &padsCfg[c].rstickSmoothing, 0.f, 0.75f);
 		configRegisterInt(strFmt("%s.StickCButtons", secname), &padsCfg[c].stickCButtons, 0, 1);
 		configRegisterInt(strFmt("%s.CancelCButtons", secname), &padsCfg[c].cancelCButtons, 0, 1);
 		configRegisterInt(strFmt("%s.SwapSticks", secname), &padsCfg[c].swapSticks, 0, 1);
