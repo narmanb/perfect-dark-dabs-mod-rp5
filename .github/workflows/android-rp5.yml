@@ -111,6 +111,9 @@ jobs:
       - name: Fix turn boost ramp feedback
         run: python3 android/fix-turn-boost-ramp.py
 
+      - name: Add page and global Restore Defaults actions
+        run: python3 android/add-restore-defaults.py
+
       - name: Validate generated SMAA on OpenGL ES
         shell: bash
         run: |
