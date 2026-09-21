@@ -60,9 +60,11 @@ protos = r'''
 static MenuItemHandlerResult menuhandlerRestoreMouseDefaults(s32 operation, struct menuitem *item, union handlerdata *data);
 static MenuItemHandlerResult menuhandlerRestoreControllerDefaults(s32 operation, struct menuitem *item, union handlerdata *data);
 static MenuItemHandlerResult menuhandlerRestoreStickDefaults(s32 operation, struct menuitem *item, union handlerdata *data);
+static MenuItemHandlerResult menuhandlerRestoreTurnBoostDefaults(s32 operation, struct menuitem *item, union handlerdata *data);
 static MenuItemHandlerResult menuhandlerRestoreVideoDefaults(s32 operation, struct menuitem *item, union handlerdata *data);
 static MenuItemHandlerResult menuhandlerRestoreAudioDefaults(s32 operation, struct menuitem *item, union handlerdata *data);
 static MenuItemHandlerResult menuhandlerRestoreGameDefaults(s32 operation, struct menuitem *item, union handlerdata *data);
+static MenuItemHandlerResult menuhandlerRestoreCrosshairColourDefaults(s32 operation, struct menuitem *item, union handlerdata *data);
 static MenuItemHandlerResult menuhandlerRestoreModPlayerDefaults(s32 operation, struct menuitem *item, union handlerdata *data);
 static MenuItemHandlerResult menuhandlerRestoreModCameraDefaults(s32 operation, struct menuitem *item, union handlerdata *data);
 static MenuItemHandlerResult menuhandlerRestoreModDisplayDefaults(s32 operation, struct menuitem *item, union handlerdata *data);
@@ -78,9 +80,11 @@ menus = [
     ("g_ExtendedMouseMenuItems", "menuhandlerRestoreMouseDefaults"),
     ("g_ExtendedControllerMenuItems", "menuhandlerRestoreControllerDefaults"),
     ("g_ExtendedStickMenuItems", "menuhandlerRestoreStickDefaults"),
+    ("g_TurnBoostMenuItems", "menuhandlerRestoreTurnBoostDefaults"),
     ("g_ExtendedVideoMenuItems", "menuhandlerRestoreVideoDefaults"),
     ("g_ExtendedAudioMenuItems", "menuhandlerRestoreAudioDefaults"),
     ("g_ExtendedGameMenuItems", "menuhandlerRestoreGameDefaults"),
+    ("g_ExtendedGameCrosshairColourMenuItems", "menuhandlerRestoreCrosshairColourDefaults"),
     ("g_ExtendedDabsModPlayerMenuItems", "menuhandlerRestoreModPlayerDefaults"),
     ("g_ExtendedDabsModCameraMenuItems", "menuhandlerRestoreModCameraDefaults"),
     ("g_ExtendedDabsModDisplayMenuItems", "menuhandlerRestoreModDisplayDefaults"),
@@ -165,6 +169,19 @@ static MenuItemHandlerResult menuhandlerRestoreStickDefaults(s32 operation, stru
 	return 0;
 }
 
+static MenuItemHandlerResult menuhandlerRestoreTurnBoostDefaults(s32 operation, struct menuitem *item, union handlerdata *data)
+{
+	static const char *keys[] = {
+		"TurnBoost", "TurnBoostRamp", "TurnBoostThreshold", "TurnBoostRelease", "TurnBoostAimMode",
+	};
+	if (operation != MENUOP_SET) return 0;
+
+	for (u32 i = 0; i < ARRAYCOUNT(keys); ++i) {
+		restoreInputPlayerKey(g_ExtMenuPlayer, keys[i]);
+	}
+	return 0;
+}
+
 static void restoreVideoConfigKeys(void)
 {
 	static const char *keys[] = {
@@ -228,6 +245,14 @@ static MenuItemHandlerResult menuhandlerRestoreGameDefaults(s32 operation, struc
 	restorePlayerConfigPointer(&g_PlayerExtCfg[g_ExtMenuPlayer].crosshaircolour);
 	restorePlayerConfigPointer(&g_PlayerExtCfg[g_ExtMenuPlayer].crosshairhealth);
 	restorePlayerConfigPointer(&g_PlayerExtCfg[g_ExtMenuPlayer].usereloads);
+	return 0;
+}
+
+static MenuItemHandlerResult menuhandlerRestoreCrosshairColourDefaults(s32 operation, struct menuitem *item, union handlerdata *data)
+{
+	if (operation == MENUOP_SET) {
+		restorePlayerConfigPointer(&g_PlayerExtCfg[g_ExtMenuPlayer].crosshaircolour);
+	}
 	return 0;
 }
 
