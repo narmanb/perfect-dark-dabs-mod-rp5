@@ -117,6 +117,9 @@ jobs:
       - name: Repair generated Restore Defaults code
         run: python3 android/fix-restore-defaults.py
 
+      - name: Verify generated Restore Defaults integration
+        run: python3 android/tests/verify-restore-defaults.py
+
       - name: Validate generated SMAA on OpenGL ES
         shell: bash
         run: |
