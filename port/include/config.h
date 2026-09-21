@@ -16,6 +16,12 @@ s32 configSave(const char *fname);
 // One section's live settings as "key=value" lines. See the definition.
 u32 configDumpSection(const char *section, char *dst, u32 dstsize);
 
+// Restore registered scalar values to the defaults captured before pd.ini load.
+// String settings are deliberately not reset by these helpers.
+s32 configResetKey(const char *key);
+s32 configResetPointer(void *ptr);
+s32 configResetPrefix(const char *prefix);
+
 // registers a variable in the config file
 // this should be done before configInit() is called, preferably in a module constructor
 void configRegisterInt(const char *key, s32 *var, s32 min, s32 max);
