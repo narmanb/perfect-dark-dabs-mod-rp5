@@ -42,6 +42,16 @@ struct configentry {
 		struct { u32 min_u32, max_u32; };
 		u32 max_str;
 	};
+	/* Scalar settings remember the value supplied by their module before
+	 * pd.ini is loaded. Menu-level "Restore Defaults" actions can therefore
+	 * restore the actual compiled default without duplicating constants in the
+	 * menu code. Strings are deliberately excluded: many of them are paths,
+	 * pack names or serialized binds rather than ordinary preferences. */
+	union {
+		s32 s32val;
+		u32 u32val;
+		f32 f32val;
+	} initial;
 } settings[CONFIG_MAX_SETTINGS];
 
 static s32 numSettings = 0;
@@ -120,6 +130,7 @@ void configRegisterInt(const char *key, s32 *var, s32 min, s32 max)
 		cfg->ptr = var;
 		cfg->min_s32 = min;
 		cfg->max_s32 = max;
+		cfg->initial.s32val = *var;
 	}
 }
 
@@ -131,6 +142,7 @@ void configRegisterUInt(const char* key, u32* var, u32 min, u32 max)
 		cfg->ptr = var;
 		cfg->min_u32 = min;
 		cfg->max_u32 = max;
+		cfg->initial.u32val = *var;
 	}
 }
 
@@ -142,6 +154,7 @@ void configRegisterFloat(const char *key, f32 *var, f32 min, f32 max)
 		cfg->ptr = var;
 		cfg->min_f32 = min;
 		cfg->max_f32 = max;
+		cfg->initial.f32val = *var;
 	}
 }
 
@@ -153,6 +166,68 @@ void configRegisterString(const char *key, char *var, u32 maxstr)
 		cfg->ptr = var;
 		cfg->max_str = maxstr;
 	}
+}
+
+static s32 configResetEntry(struct configentry *cfg)
+{
+	if (!cfg || !cfg->ptr) {
+		return 0;
+	}
+
+	switch (cfg->type) {
+	case CFG_S32:
+		*(s32 *)cfg->ptr = cfg->initial.s32val;
+		return 1;
+	case CFG_F32:
+		*(f32 *)cfg->ptr = cfg->initial.f32val;
+		return 1;
+	case CFG_U32:
+		*(u32 *)cfg->ptr = cfg->initial.u32val;
+		return 1;
+	default:
+		/* Do not reset CFG_STR here. See the configentry comment above. */
+		return 0;
+	}
+}
+
+s32 configResetKey(const char *key)
+{
+	return key ? configResetEntry(configFindEntry(key)) : 0;
+}
+
+s32 configResetPointer(void *ptr)
+{
+	if (!ptr) {
+		return 0;
+	}
+
+	for (s32 i = 0; i < numSettings; ++i) {
+		if (settings[i].ptr == ptr) {
+			return configResetEntry(&settings[i]);
+		}
+	}
+
+	return 0;
+}
+
+s32 configResetPrefix(const char *prefix)
+{
+	s32 count = 0;
+	size_t len;
+
+	if (!prefix || !prefix[0]) {
+		return 0;
+	}
+
+	len = strlen(prefix);
+
+	for (s32 i = 0; i < numSettings; ++i) {
+		if (!strncasecmp(settings[i].key, prefix, len)) {
+			count += configResetEntry(&settings[i]);
+		}
+	}
+
+	return count;
 }
 
 static void configSetFromString(const char *key, const char *val)
