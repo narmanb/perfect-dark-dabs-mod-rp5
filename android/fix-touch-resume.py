@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 from pathlib import Path
+import runpy
 
 ROOT = Path(__file__).resolve().parents[1]
 SURFACE = ROOT / "android/app/src/main/java/org/libsdl/app/SDLSurface.java"
@@ -35,3 +36,8 @@ if count != 1:
 
 SURFACE.write_text(text.replace(old, new, 1))
 print("touch resume fix: preserved Perfect Dark surface touch listener across Android resume")
+
+# This step already runs first in the Android workflow, so keep the small
+# Android-only quality-of-life patch beside the lifecycle/touch fix rather than
+# adding another workflow-only generated-source step.
+runpy.run_path(str(ROOT / "android/add-android-qol.py"), run_name="__main__")
