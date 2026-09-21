@@ -114,6 +114,9 @@ jobs:
       - name: Add page and global Restore Defaults actions
         run: python3 android/add-restore-defaults.py
 
+      - name: Repair generated Restore Defaults code
+        run: python3 android/fix-restore-defaults.py
+
       - name: Validate generated SMAA on OpenGL ES
         shell: bash
         run: |
