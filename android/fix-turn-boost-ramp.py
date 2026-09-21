@@ -51,10 +51,25 @@ new_gate = '''\tif (contpad1 >= 0 && contpad1 < INPUT_MAX_CONTROLLERS
 \t\tconst bool controllerturn = movedata.cannaturalturn
 \t\t\t? movedata.analogturn != 0
 \t\t\t: (movedata.aimturnleftspeed > 0.f || movedata.aimturnrightspeed > 0.f);
-\t\tconst f32 normalmax = movedata.cannaturalturn ? turnbase : turnbase * 0.7f;
+\t\tf32 normalmax = movedata.cannaturalturn ? turnbase : turnbase * 0.7f;
+
+\t\t// The game's five-unit safe deadzone turns a full 127 stick sample into
+\t\t// analogturn 122. Modern full-range look then divides by 127 and squares
+\t\t// that value, so its largest real natural-turn output is only about
+\t\t// 92.28% of turnbase. Normalize against that reachable maximum so the
+\t\t// threshold slider remains truthful: 100% means an actual full stick.
+\t\tif (movedata.cannaturalturn
+\t\t\t\t&& controlmode == CONTROLMODE_PC
+\t\t\t\t&& inputControllerGetSticksSwapped(contpad1)
+\t\t\t\t&& inputControllerUsesFullRightStickRange(contpad1)) {
+\t\t\tconst f32 fullstick = 122.f / 127.f;
+\t\t\tnormalmax *= fullstick * fullstick;
+\t\t}
+
 \t\tf32 amount = controllerturn && normalmax > 0.f
 \t\t\t? fabsf(g_Vars.currentplayer->speedthetacontrol) / normalmax
 \t\t\t: 0.f;
+\t\tif (amount > 1.f) amount = 1.f;
 \t\tf32 dt = g_Vars.lvupdate60freal / 60.f;
 \t\tf32 aimfactor = 1.f;
 '''
@@ -74,4 +89,4 @@ if s.count(old_final) != 1:
 s = s.replace(old_final, new_final, 1)
 
 p.write_text(s, encoding="utf-8")
-print("turn boost now ramps from actual controller turn output and reaches 4x at 100%")
+print("turn boost reaches 4x at 100% and threshold 100% maps to reachable full stick")
