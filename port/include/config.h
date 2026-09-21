@@ -21,7 +21,6 @@ u32 configDumpSection(const char *section, char *dst, u32 dstsize);
 s32 configResetKey(const char *key);
 s32 configResetPointer(void *ptr);
 s32 configResetPrefix(const char *prefix);
-s32 configResetRange(void *start, u32 size);
 
 // registers a variable in the config file
 // this should be done before configInit() is called, preferably in a module constructor
