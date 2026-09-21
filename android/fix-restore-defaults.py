@@ -26,3 +26,13 @@ if s.count(anchor) != 1:
 s = s.replace(anchor, decl, 1)
 p.write_text(s, encoding="utf-8")
 print("restore-default fix: declared Android reset helper")
+
+p = root / "port/src/androidcontrolsmenu.c"
+s = p.read_text(encoding="utf-8")
+anchor = "static struct menuitem g_AndroidControllerSettingsMenuItems[];\n"
+proto = anchor + "static MenuItemHandlerResult menuhandlerAndroidRestoreDefaults(s32 operation, struct menuitem *item, union handlerdata *data);\n"
+if s.count(anchor) != 1:
+    raise SystemExit(f"restore-default fix: Android handler declaration anchor count {s.count(anchor)}")
+s = s.replace(anchor, proto, 1)
+p.write_text(s, encoding="utf-8")
+print("restore-default fix: declared Android Restore Defaults menu handler")
