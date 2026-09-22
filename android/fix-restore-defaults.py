@@ -38,8 +38,9 @@ p.write_text(s, encoding="utf-8")
 print("restore-default fix: declared Android Restore Defaults menu handler")
 
 # This workflow step is already the final generated-source repair before the
-# validation/build steps. Keep the general runtime pass separate from Restore
-# Defaults itself, but invoke it here so later feature generators cannot
-# overwrite the optimization.
+# validation/build steps. Keep the general runtime passes separate from Restore
+# Defaults itself, but invoke them here so later feature generators cannot
+# overwrite the optimizations.
 import runpy
 runpy.run_path(str(root / "android/optimize-core-runtime.py"), run_name="__main__")
+runpy.run_path(str(root / "android/optimize-shader-vao.py"), run_name="__main__")
