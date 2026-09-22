@@ -148,6 +148,27 @@ jobs:
           status=${PIPESTATUS[0]}
           exit "$status"
 
+      - name: Capture effective native compiler flags
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p native-compile-audit
+          CCDB="$(find android/app/.cxx android/app/build -type f -name compile_commands.json -path '*arm64-v8a*' -print 2>/dev/null | sort | head -n 1)"
+          if [ -z "$CCDB" ]; then
+            CCDB="$(find android/app/.cxx android/app/build -type f -name compile_commands.json -print 2>/dev/null | sort | head -n 1)"
+          fi
+          test -n "$CCDB"
+          echo "Using compile database: $CCDB"
+          cp "$CCDB" native-compile-audit/compile_commands.json
+          CACHE="$(dirname "$CCDB")/CMakeCache.txt"
+          if [ -f "$CACHE" ]; then
+            cp "$CACHE" native-compile-audit/CMakeCache.txt
+          fi
+          python3 android/tests/report-compile-flags.py \
+            "$CCDB" \
+            --text native-compile-audit/summary.txt \
+            --json native-compile-audit/summary.json
+
       - name: Verify APK identity and signature
         shell: bash
         run: |
@@ -169,6 +190,14 @@ jobs:
             port/fast3d/gfx_opengl.cpp
             port/src/optionsmenu.c
           if-no-files-found: error
+
+      - name: Upload native compile flag audit
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: native-compile-audit-run${{ github.run_number }}
+          path: native-compile-audit/
+          if-no-files-found: warn
 
       - name: Upload build log
         if: always()
