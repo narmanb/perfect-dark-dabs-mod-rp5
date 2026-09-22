@@ -22,10 +22,12 @@
         <!-- Allow both landscape rotations. -->
         <meta-data android:name="SDL_ENV.SDL_IOS_ORIENTATIONS" android:value="LandscapeLeft LandscapeRight"/>
         
-        <!-- LauncherActivity handles ROM selection/copy before starting SDL -->
+        <!-- LauncherActivity handles ROM selection/copy before starting SDL. Keep it as the
+             task root so reopening the app returns to the pre-game launcher/managers. -->
         <activity
             android:name=".LauncherActivity"
             android:exported="true"
+            android:clearTaskOnLaunch="true"
             android:screenOrientation="sensorLandscape"
             android:configChanges="layoutDirection|locale|orientation|uiMode|screenLayout|screenSize|smallestScreenSize|keyboard|keyboardHidden|navigation"
             android:theme="@style/Theme.PerfectDark.Fullscreen">
@@ -51,10 +53,12 @@
             android:configChanges="layoutDirection|locale|orientation|uiMode|screenLayout|screenSize|smallestScreenSize|keyboard|keyboardHidden|navigation"
             android:theme="@style/Theme.PerfectDark.Fullscreen"/>
 
-        <!-- MainActivity (SDLActivity) runs the game after ROM is present -->
+        <!-- MainActivity (SDLActivity) runs only after the user presses Play. It is removed
+             when the launcher task is explicitly relaunched from the home screen. -->
         <activity
             android:name=".MainActivity"
             android:exported="false"
+            android:finishOnTaskLaunch="true"
             android:screenOrientation="sensorLandscape"
             android:configChanges="layoutDirection|locale|orientation|uiMode|screenLayout|screenSize|smallestScreenSize|keyboard|keyboardHidden|navigation"
             android:theme="@style/Theme.PerfectDark.Fullscreen"/>
