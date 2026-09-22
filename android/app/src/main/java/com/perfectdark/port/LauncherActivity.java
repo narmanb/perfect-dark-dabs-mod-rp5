@@ -190,8 +190,8 @@ public class LauncherActivity extends AppCompatActivity {
         }
 
         if (result.hashStatus == 0) {
-            Toast.makeText(this, "NTSC-U v1.1 verified — starting game", Toast.LENGTH_SHORT).show();
-            startGame();
+            Toast.makeText(this, "NTSC-U v1.1 verified — launcher ready", Toast.LENGTH_SHORT).show();
+            showLauncherReady();
         } else if (result.hashStatus == 1) {
             showV10WarningDialog(getRomFile());
         } else {
@@ -341,10 +341,10 @@ public class LauncherActivity extends AppCompatActivity {
     }
 
     private void startGame() {
-        Intent intent = new Intent(this, MainActivity.class);
-        intent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_NEW_TASK);
-        startActivity(intent);
-        finish();
+        // Keep the launcher as the task root. This makes the pre-game managers
+        // reachable again after SDL exits and allows a home-screen relaunch to
+        // reset the task back to the launcher instead of resuming MainActivity.
+        startActivity(new Intent(this, MainActivity.class));
     }
 
     // 0 = v1.1, 1 = v1.0, -1 = mismatch
@@ -401,8 +401,8 @@ public class LauncherActivity extends AppCompatActivity {
                 .setTitle("NTSC v1.0 detected")
                 .setMessage("You selected NTSC-U v1.0 (not recommended).\n"
                         + "The port targets v1.1; some content may not work.\n\n"
-                        + "Proceed with v1.0 or pick a different ROM?")
-                .setPositiveButton("Proceed", (d, w) -> startGame())
+                        + "Use v1.0 or pick a different ROM?")
+                .setPositiveButton("Use ROM", (d, w) -> showLauncherReady())
                 .setNegativeButton("Pick another", (d, w) -> {
                     try {
                         //noinspection ResultOfMethodCallIgnored
