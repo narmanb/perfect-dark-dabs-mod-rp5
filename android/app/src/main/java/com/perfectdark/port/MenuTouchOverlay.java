@@ -48,6 +48,7 @@ public final class MenuTouchOverlay extends View {
     private final Paint fill = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint outline = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint text = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final Paint.FontMetrics fontMetrics = new Paint.FontMetrics();
 
     private boolean menuActive = true;
     private int activePointerId = -1;
@@ -113,30 +114,39 @@ public final class MenuTouchOverlay extends View {
             return false;
         }
 
+        boolean visualStateChanged = false;
+
         switch (action) {
             case MotionEvent.ACTION_UP:
                 if (event.getPointerId(actionIndex) == activePointerId) {
                     releaseControl(true);
+                    visualStateChanged = true;
                 }
                 break;
 
             case MotionEvent.ACTION_CANCEL:
                 releaseControl(false);
+                visualStateChanged = true;
                 break;
 
             case MotionEvent.ACTION_POINTER_UP:
                 if (event.getPointerId(actionIndex) == activePointerId) {
                     releaseControl(true);
+                    visualStateChanged = true;
                 }
                 break;
 
             default:
                 // Holding a direction keeps its SDL key down, which gives the
                 // game's normal menu repeat behavior without a custom timer.
+                // Motion itself does not change this overlay's visual state, so
+                // avoid scheduling redundant redraws for ACTION_MOVE events.
                 break;
         }
 
-        invalidate();
+        if (visualStateChanged) {
+            invalidate();
+        }
         return true;
     }
 
@@ -276,8 +286,8 @@ public final class MenuTouchOverlay extends View {
         canvas.drawCircle(x, y, radius, outline);
 
         text.setTextSize(Math.max(14.0f, radius * (label.length() > 2 ? 0.42f : 0.52f)));
-        Paint.FontMetrics fm = text.getFontMetrics();
-        float baseline = y - (fm.ascent + fm.descent) * 0.5f;
+        text.getFontMetrics(fontMetrics);
+        float baseline = y - (fontMetrics.ascent + fontMetrics.descent) * 0.5f;
         canvas.drawText(label, x, baseline, text);
     }
 }
