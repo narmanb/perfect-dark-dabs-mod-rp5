@@ -1,0 +1,86 @@
+PERFECT DARK ANDROID - NEXT PERFORMANCE OPTIMIZATION PLAN
+Recorded: 2026-09-22
+Repository: narmanb/perfect-dark-dabs-mod-rp5
+Branch: android-port
+Primary target: Retroid Pocket 5 / Android 13 / OpenGL ES
+
+PURPOSE
+
+This file records the next non-touch, non-Post-FX optimization sequence agreed
+after hardware testing of Runs 150-154. It is a plan/checkpoint, not evidence
+that every item below has been implemented or improved FPS.
+
+CURRENT HARDWARE OBSERVATION
+
+- After enabling broad native -O2, restoring function inlining, and reducing
+  Android menu-overlay allocation churn, the RP5 was reported to hold roughly
+  59-60 FPS in menus, including rapid menu switching, with touchscreen gameplay
+  controls off.
+- A brief lower-FPS transition can still occur when enabling effects such as
+  Sharpen or SMAA. Those Post-FX transition costs are deliberately deferred.
+- The phone still showed occasional dips, but the main target for the next pass
+  is non-touch work that matters during normal RP5 gameplay.
+
+DEFERRED FOR LATER
+
+Do not fold the previously audited SMAA/FXAA/MSAA/Post-FX changes into these
+experiments yet. Keep them separate so device testing can attribute any change.
+Those deferred items include automatic SMAA readback removal, Post-FX uniform
+caching/state reduction, and MSAA framebuffer-completeness caching.
+
+NEXT OPTIMIZATION SEQUENCE
+
+1. ANDROID REDUNDANT glFlush REMOVAL - CURRENT TEST
+   The OpenGL backend calls glFlush() at the end of every frame immediately
+   before SDL_GL_SwapWindow(). On Android/EGL, the swap submits pending GLES
+   work, making the explicit flush a likely redundant driver call. Test an
+   Android-only guard first; preserve existing behavior on other platforms.
+   Keep this isolated from other renderer changes for hardware A/B testing.
+
+2. GLES TEXTURE/STATE CACHING
+   Investigate repeated glActiveTexture/glBindTexture and related renderer state
+   calls outside Post-FX. The renderer already batches triangles, and previous
+   stress evidence showed batches breaking mostly on texture/state changes rather
+   than the triangle-buffer capacity. Measure and eliminate only demonstrably
+   redundant GLES calls. This is especially relevant with HD textures and XBLA
+   models enabled.
+
+3. SHADER / VAO STATE CACHING
+   Inspect shader switches that currently perform glUseProgram, vertex-attribute
+   enable/pointer setup, and uniform updates. Determine whether returning to a
+   previously used shader can safely reuse VAO/attribute state instead of
+   rebuilding the same configuration. Preserve exact rendering and GLES state
+   correctness.
+
+4. THINLTO EXPERIMENT
+   Native code now uses -O2 with normal inlining, but no link-time optimization.
+   Test ThinLTO as a separate Android build change. Verify final ARM64 compiler
+   and linker commands, APK build/signing, generated feature validation, and
+   device stability before keeping it. Do not introduce global -O3 or fast-math
+   as part of this experiment.
+
+5. RELEASE-LIKE BENCHMARK VARIANT
+   If useful after the above, produce a release-like performance variant while
+   preserving the same package/signing identity needed for update-in-place
+   testing. Compare it against the current Debug/O2 build. Do not assume the
+   word "release" itself means faster; verify the actual generated/native flags
+   and runtime behavior.
+
+LOWER PRIORITY / CONTINUING INVESTIGATION
+
+- Menu/world update work while paused.
+- Audio queue starvation correlated with frame stalls; fix the cause rather than
+  merely increasing buffering and hiding crackle.
+- General per-frame allocations, config/filesystem work, and Android scheduling.
+- XBLA table maintenance currently checks a few dozen values each frame; real
+  work but likely too small to matter alone.
+
+RULES FOR THIS PLAN
+
+- One meaningful optimization class per test build where practical.
+- Inspect generated Android runtime source, not only checked-in base source.
+- Preserve Restore Defaults, Turn Boost, launcher behavior, HD texture/XBLA
+  support, signing identity, and all existing Android features.
+- Run Android GitHub Actions after changes and inspect failures before claiming
+  success.
+- Do not claim FPS gains until hardware testing confirms them.
