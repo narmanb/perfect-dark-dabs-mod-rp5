@@ -31,3 +31,9 @@ if (NOT ${ZLIB_FOUND})
         set(ZLIB_LIBRARIES zlibstatic)
     endif()
 endif()
+
+# Android builds run the native game at -O2, but the decomp's common flags
+# disable function inlining globally. Re-enable normal O2 inlining here after
+# the dependency targets have been configured so it applies to Perfect Dark
+# itself without changing SDL2 or zlib.
+add_compile_options(-finline-functions)
