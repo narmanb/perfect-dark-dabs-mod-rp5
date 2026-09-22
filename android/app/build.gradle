@@ -38,7 +38,15 @@ android {
         
         externalNativeBuild {
             cmake {
-                cppFlags "-std=c++20"
+                // The shipped Android artifact is an AGP debug variant so it can keep
+                // the stable CI test signer, but it is also the build used on-device.
+                // AGP maps that variant to CMAKE_BUILD_TYPE=Debug, which otherwise
+                // leaves nearly the entire native game and SDL at Clang's -O0. Keep
+                // symbols/debug packaging while compiling native C/C++ at -O2. The
+                // source-specific Fast3D/XBLA/-O3 texture flags are appended later by
+                // CMake and therefore retain their stronger/specialized settings.
+                cFlags "-O2"
+                cppFlags "-std=c++20 -O2"
                 arguments "-DANDROID_STL=c++_shared",
                          "-DANDROID_PLATFORM=android-21",
                          "-DTARGET_OS=android"
